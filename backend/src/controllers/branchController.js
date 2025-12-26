@@ -1,11 +1,9 @@
-const prisma = require("../prisma/client");
+const branchService = require("../services/branchService");
 
 // GET all branches
 const getAllBranches = async (req, res) => {
   try {
-    const branches = await prisma.branch.findMany({
-      include: { staff: true, services: true },
-    });
+    const branches = await branchService.getAllBranches();
     res.json(branches);
   } catch (err) {
     console.error(err);
@@ -17,10 +15,7 @@ const getAllBranches = async (req, res) => {
 const getBranchById = async (req, res) => {
   try {
     const { id } = req.params;
-    const branch = await prisma.branch.findUnique({
-      where: { id },
-      include: { staff: true, services: true },
-    });
+    const branch = await branchService.getBranchById(id);
     if (!branch) {
       res.status(404).json({ error: "Branch not found" });
       return;
@@ -35,7 +30,6 @@ const getBranchById = async (req, res) => {
 // CREATE branch
 const createBranch = async (req, res) => {
   try {
-    console.log("Received request body:", req.body);
     const { name, address } = req.body;
 
     // Validation
@@ -46,9 +40,7 @@ const createBranch = async (req, res) => {
       return;
     }
 
-    const branch = await prisma.branch.create({
-      data: { name, address },
-    });
+    const branch = await branchService.createBranch({ name, address });
     res.status(201).json(branch);
   } catch (err) {
     console.error("Error creating branch:", err);
@@ -74,10 +66,7 @@ const updateBranch = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, address } = req.body;
-    const branch = await prisma.branch.update({
-      where: { id },
-      data: { name, address },
-    });
+    const branch = await branchService.updateBranch(id, {name, address})
     res.json(branch);
   } catch (err) {
     console.error(err);
@@ -89,9 +78,7 @@ const updateBranch = async (req, res) => {
 const deleteBranch = async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.branch.delete({
-      where: { id },
-    });
+    await branchService.deleteBranch(id);
     res.status(204).send();
   } catch (err) {
     console.error(err);

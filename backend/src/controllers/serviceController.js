@@ -1,11 +1,9 @@
-const prisma = require("../prisma/client");
+const serviceService = require("../services/serviceService");
 
 // GET all services
 const getAllServices = async (req, res) => {
   try {
-    const services = await prisma.service.findMany({
-      include: { branch: true },
-    });
+    const services = await serviceService.getAllServices();
     res.json(services);
   } catch (err) {
     console.error(err);
@@ -17,10 +15,7 @@ const getAllServices = async (req, res) => {
 const getServiceById = async (req, res) => {
   try {
     const { id } = req.params;
-    const service = await prisma.service.findUnique({
-      where: { id },
-      include: { branch: true },
-    });
+    const service = await serviceService.getServiceById(id);
     if (!service) {
       return res.status(404).json({ error: "Service not found" });
     }
@@ -35,15 +30,13 @@ const getServiceById = async (req, res) => {
 const createService = async (req, res) => {
   try {
     const { name, description, durationMin, price, branchId, isActive } = req.body;
-    const service = await prisma.service.create({
-      data: {
-        name,
-        description,
-        durationMin,
-        price,
-        branchId,
-        isActive: isActive !== undefined ? isActive : true,
-      },
+    const service = await serviceService.createService({
+      name,
+      description,
+      durationMin,
+      price,
+      branchId,
+      isActive,
     });
     res.status(201).json(service);
   } catch (err) {
@@ -57,16 +50,13 @@ const updateService = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, durationMin, price, branchId, isActive } = req.body;
-    const service = await prisma.service.update({
-      where: { id },
-      data: {
-        name,
-        description,
-        durationMin,
-        price,
-        branchId,
-        isActive,
-      },
+    const service = await serviceService.updateService(id, {
+      name,
+      description,
+      durationMin,
+      price,
+      branchId,
+      isActive,
     });
     res.json(service);
   } catch (err) {
@@ -79,9 +69,7 @@ const updateService = async (req, res) => {
 const deleteService = async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.service.delete({
-      where: { id },
-    });
+    await serviceService.deleteService(id);
     res.status(204).send();
   } catch (err) {
     console.error(err);
