@@ -1,0 +1,143 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model Branch {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  address   String
+  createdAt DateTime  @default(now())
+  sales     Sale[]
+  services  Service[]
+  staff     Staff[]
+}
+
+model Staff {
+  id        String   @id @default(uuid())
+  name      String
+  role      String?
+  branchId  String?
+  createdAt DateTime @default(now())
+  sales     Sale[]
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+}
+
+model Service {
+  id            String            @id @default(uuid())
+  name          String
+  description   String?
+  durationMin   Int?
+  price         Float
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  branchId      String?
+  usesMaterials Boolean           @default(false)
+  addOns        AddOn[]
+  sales         Sale[]
+  Branch        Branch?           @relation(fields: [branchId], references: [id])
+  materials     ServiceMaterial[]
+}
+
+model Material {
+  id                 String              @id @default(uuid())
+  name               String
+  unit               String
+  stock              Float
+  createdAt          DateTime            @default(now())
+  inventoryMovements InventoryMovement[]
+  saleMaterials      SaleMaterial[]
+  serviceMaterials   ServiceMaterial[]
+}
+
+model ServiceMaterial {
+  id         String   @id @default(uuid())
+  serviceId  String
+  materialId String
+  quantity   Float
+  material   Material @relation(fields: [materialId], references: [id])
+  service    Service  @relation(fields: [serviceId], references: [id])
+}
+
+model AddOn {
+  id         String      @id @default(uuid())
+  name       String
+  price      Float
+  serviceId  String
+  service    Service     @relation(fields: [serviceId], references: [id])
+  saleAddOns SaleAddOn[]
+}
+
+model Sale {
+  id         String         @id @default(uuid())
+  serviceId  String
+  branchId   String
+  staffId    String
+  customerId String?
+  basePrice  Float
+  addOns     Float
+  total      Float
+  createdAt  DateTime       @default(now())
+  payments   Payment[]
+  branch     Branch         @relation(fields: [branchId], references: [id])
+  customer   Customer?      @relation(fields: [customerId], references: [id])
+  service    Service        @relation(fields: [serviceId], references: [id])
+  staff      Staff          @relation(fields: [staffId], references: [id])
+  saleAddOns SaleAddOn[]
+  materials  SaleMaterial[]
+}
+
+model SaleAddOn {
+  id      String @id @default(uuid())
+  saleId  String
+  addOnId String
+  price   Float
+  addOn   AddOn  @relation(fields: [addOnId], references: [id])
+  sale    Sale   @relation(fields: [saleId], references: [id])
+}
+
+model SaleMaterial {
+  id         String   @id @default(uuid())
+  saleId     String
+  materialId String
+  quantity   Float
+  material   Material @relation(fields: [materialId], references: [id])
+  sale       Sale     @relation(fields: [saleId], references: [id])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?  @unique
+  createdAt DateTime @default(now())
+  sales     Sale[]
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  saleId    String
+  method    String
+  amount    Float
+  createdAt DateTime @default(now())
+  sale      Sale     @relation(fields: [saleId], references: [id])
+}
+
+model InventoryMovement {
+  id          String   @id @default(uuid())
+  materialId  String
+  quantity    Float
+  type        String
+  referenceId String?
+  createdAt   DateTime @default(now())
+  material    Material @relation(fields: [materialId], references: [id])
+}
