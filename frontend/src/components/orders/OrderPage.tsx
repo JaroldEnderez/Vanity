@@ -1,7 +1,7 @@
 "use client";
 
 import { Service } from "@/src/app/types/service";
-import ServiceGrid from "./ServiceGrid";
+import ServiceGrid from "./services/ServiceGrid";
 
 type Props = {
   services: Service[];
@@ -15,4 +15,3 @@ export default function OrderPage({ services }: Props) {
     </div>
   );
 }
-

@@ -35,7 +35,7 @@ model Staff {
 
 model Service {
   id            String            @id @default(uuid())
-  name          String
+  name          String            @unique
   description   String?
   durationMin   Int?
   price         Float
@@ -44,7 +44,7 @@ model Service {
   branchId      String?
   usesMaterials Boolean           @default(false)
   addOns        AddOn[]
-  sales         Sale[]
+  saleServices  SaleService[]
   Branch        Branch?           @relation(fields: [branchId], references: [id])
   materials     ServiceMaterial[]
 }
@@ -79,22 +79,28 @@ model AddOn {
 }
 
 model Sale {
-  id         String         @id @default(uuid())
-  serviceId  String
+  id         String        @id @default(uuid())
   branchId   String
   staffId    String
   customerId String?
-  basePrice  Float
-  addOns     Float
-  total      Float
-  createdAt  DateTime       @default(now())
-  payments   Payment[]
-  branch     Branch         @relation(fields: [branchId], references: [id])
-  customer   Customer?      @relation(fields: [customerId], references: [id])
-  service    Service        @relation(fields: [serviceId], references: [id])
-  staff      Staff          @relation(fields: [staffId], references: [id])
-  saleAddOns SaleAddOn[]
-  materials  SaleMaterial[]
+
+  status     SaleStatus    @default(DRAFT)
+
+  basePrice  Float         @default(0)
+  addOns     Float         @default(0)
+  total      Float         @default(0)
+
+  createdAt  DateTime      @default(now())
+  endedAt    DateTime?
+
+  saleServices SaleService[]
+  saleAddOns   SaleAddOn[]
+  saleMaterials SaleMaterial[]
+  payments     Payment[]
+
+  branch     Branch    @relation(fields: [branchId], references: [id])
+  staff      Staff     @relation(fields: [staffId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
 }
 
 model SaleAddOn {
@@ -104,6 +110,19 @@ model SaleAddOn {
   price   Float
   addOn   AddOn  @relation(fields: [addOnId], references: [id])
   sale    Sale   @relation(fields: [saleId], references: [id])
+}
+
+model SaleService {
+  id        String   @id @default(uuid())
+  saleId    String
+  serviceId String
+  qty       Int      @default(1)
+  price     Float    // unit price at time of sale
+
+  sale      Sale     @relation(fields: [saleId], references: [id])
+  service   Service  @relation(fields: [serviceId], references: [id])
+
+  createdAt DateTime @default(now())
 }
 
 model SaleMaterial {
@@ -140,4 +159,10 @@ model InventoryMovement {
   referenceId String?
   createdAt   DateTime @default(now())
   material    Material @relation(fields: [materialId], references: [id])
+}
+
+enum SaleStatus {
+  DRAFT      // In-progress, can be modified
+  COMPLETED  // Finalized, immutable
+  CANCELLED  // Cancelled, immutable
 }
