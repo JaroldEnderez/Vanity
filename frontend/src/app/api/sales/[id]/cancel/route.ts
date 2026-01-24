@@ -3,10 +3,11 @@ import { cancelSale } from "@/src/app/lib/sales";
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sale = await cancelSale(params.id);
+    const { id } = await params;
+    const sale = await cancelSale(id);
     return NextResponse.json(sale);
   } catch (error) {
     console.error(error);

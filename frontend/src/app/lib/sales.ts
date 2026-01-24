@@ -257,3 +257,80 @@ export async function deleteSale(id: string) {
     where: { id },
   });
 }
+
+// GET completed sales for history
+export async function getCompletedSales(options?: {
+  startDate?: Date;
+  endDate?: Date;
+  limit?: number;
+}) {
+  const { startDate, endDate, limit } = options || {};
+
+  return db.sale.findMany({
+    where: {
+      status: SaleStatus.COMPLETED,
+      ...(startDate || endDate
+        ? {
+            endedAt: {
+              ...(startDate && { gte: startDate }),
+              ...(endDate && { lte: endDate }),
+            },
+          }
+        : {}),
+    },
+    include: {
+      branch: true,
+      staff: true,
+      customer: true,
+      saleServices: {
+        include: { service: true },
+      },
+    },
+    orderBy: {
+      endedAt: "desc",
+    },
+    ...(limit && { take: limit }),
+  });
+}
+
+// GET today's completed sales
+export async function getTodaysSales() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return getCompletedSales({
+    startDate: today,
+    endDate: tomorrow,
+  });
+}
+
+// GET this week's completed sales
+export async function getWeeklySales() {
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+  return getCompletedSales({
+    startDate: startOfWeek,
+    endDate: endOfWeek,
+  });
+}
+
+// GET this month's completed sales
+export async function getMonthlySales() {
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+
+  return getCompletedSales({
+    startDate: startOfMonth,
+    endDate: endOfMonth,
+  });
+}

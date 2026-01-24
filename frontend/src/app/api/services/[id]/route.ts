@@ -3,10 +3,11 @@ import { getServiceById, updateService, deleteService } from "@/src/app/lib/serv
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const service = await getServiceById(params.id);
+    const { id } = await params;
+    const service = await getServiceById(id);
     
     if (!service) {
       return NextResponse.json(
@@ -27,11 +28,12 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await req.json();
-    const service = await updateService(params.id, body);
+    const service = await updateService(id, body);
     return NextResponse.json(service);
   } catch (error) {
     console.error(error);
@@ -44,10 +46,11 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await deleteService(params.id);
+    const { id } = await params;
+    await deleteService(id);
     return NextResponse.json({ message: "Service deleted successfully" });
   } catch (error) {
     console.error(error);

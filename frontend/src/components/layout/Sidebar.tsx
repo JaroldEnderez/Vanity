@@ -1,6 +1,19 @@
-// components/layout/SidebarNav.tsx
+"use client";
+
+import { useState } from "react";
 import Link from "next/link"
-import { ShoppingCart, Box, BarChart, Settings } from "lucide-react"
+import { 
+  ShoppingCart, 
+  Box, 
+  BarChart, 
+  Settings, 
+  History,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  CalendarDays,
+  CalendarRange
+} from "lucide-react"
 
 const navItems = [
   { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
@@ -9,7 +22,15 @@ const navItems = [
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ]
 
+const salesHistoryItems = [
+  { label: "Daily Sales", href: "/dashboard/sales/daily", icon: Calendar },
+  { label: "Weekly Sales", href: "/dashboard/sales/weekly", icon: CalendarDays },
+  { label: "Monthly Sales", href: "/dashboard/sales/monthly", icon: CalendarRange },
+]
+
 export default function Sidebar() {
+  const [isSalesHistoryOpen, setIsSalesHistoryOpen] = useState(false);
+
   return (
     <aside className="w-64 bg-white border-r flex flex-col">
       {/* Logo */}
@@ -29,6 +50,40 @@ export default function Sidebar() {
             <span>{label}</span>
           </Link>
         ))}
+
+        {/* Sales History - Collapsible */}
+        <div>
+          <button
+            onClick={() => setIsSalesHistoryOpen(!isSalesHistoryOpen)}
+            className="w-full flex items-center justify-between gap-3 rounded-lg px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+          >
+            <div className="flex items-center gap-3">
+              <History size={20} />
+              <span>Sales History</span>
+            </div>
+            {isSalesHistoryOpen ? (
+              <ChevronDown size={16} />
+            ) : (
+              <ChevronRight size={16} />
+            )}
+          </button>
+
+          {/* Sub-items */}
+          {isSalesHistoryOpen && (
+            <div className="ml-4 mt-1 space-y-1">
+              {salesHistoryItems.map(({ label, href, icon: Icon }) => (
+                <Link
+                  key={label}
+                  href={href}
+                  className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition"
+                >
+                  <Icon size={16} />
+                  <span>{label}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* Footer */}
