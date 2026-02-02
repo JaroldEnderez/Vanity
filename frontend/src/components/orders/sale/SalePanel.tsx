@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSaleStore, DraftSale, DraftStatus } from "@/src/app/store/saleStore";
 import StartSaleButton from "./StartSaleButton";
 import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X } from "lucide-react";
@@ -39,6 +39,10 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [showPayConfirmation, setShowPayConfirmation] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [cashReceived, setCashReceived] = useState<string>("");
+    const [newItemId, setNewItemId] = useState<string | null>(null);
+    
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const itemsEndRef = useRef<HTMLDivElement>(null);
 
     // Subscribe to draftSales and activeDraftId to trigger re-renders on changes
     const draftSales = useSaleStore((state) => state.draftSales);
@@ -51,6 +55,9 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const activeDraft = activeDraftId 
       ? draftSales.find((d) => d.id === activeDraftId) || null 
       : null;
+
+    // Track previous items count to detect new additions
+    const prevItemsCount = useRef(activeDraft?.items.length || 0);
 
     // Calculate change
     const cashAmount = parseFloat(cashReceived) || 0;
@@ -66,6 +73,29 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         setCashReceived("");
         setShowPayConfirmation(false);
     }, [activeDraftId]);
+
+    // Auto-scroll when new item is added
+    useEffect(() => {
+        const currentCount = activeDraft?.items.length || 0;
+        
+        if (currentCount > prevItemsCount.current && activeDraft?.items.length) {
+            // New item added - get the last item's ID
+            const lastItem = activeDraft.items[activeDraft.items.length - 1];
+            setNewItemId(lastItem.id);
+            
+            // Scroll to bottom with smooth animation
+            setTimeout(() => {
+                itemsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 50);
+            
+            // Clear the new item highlight after animation
+            setTimeout(() => {
+                setNewItemId(null);
+            }, 600);
+        }
+        
+        prevItemsCount.current = currentCount;
+    }, [activeDraft?.items]);
 
     if (!mounted) return null;
 
@@ -114,20 +144,26 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
 
     return (
         <div className="h-full flex flex-col">
-        {/* Scrollable services section */}
-        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-            <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Started:</span>
-                <span className="font-medium">{startedTime}</span>
-            </div>
+        {/* Sticky header */}
+        <div className="flex-shrink-0 flex justify-between text-sm pb-3 border-b mb-3 bg-slate-50">
+            <span className="text-slate-600">Started:</span>
+            <span className="font-medium">{startedTime}</span>
+        </div>
 
+        {/* Scrollable services section */}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-4">
             <div className="space-y-2">
                 <h4 className="font-medium">Services</h4>
                 {activeDraft.items.length === 0 && (
                   <p className="text-sm text-slate-500 py-2">No services added yet. Click a service to add it.</p>
                 )}
                 {activeDraft.items.map((item) => (
-                <div key={item.id} className="rounded bg-slate-100 p-3 space-y-2 group relative">
+                <div 
+                  key={item.id} 
+                  className={`rounded bg-slate-100 p-3 space-y-2 group relative transition-all duration-300 ${
+                    newItemId === item.id ? 'animate-highlight ring-2 ring-green-400 ring-opacity-75' : ''
+                  }`}
+                >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="font-medium">{item.name}</div>
@@ -198,6 +234,8 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                     )}
                 </div>
                 ))}
+                {/* Scroll anchor for auto-scroll */}
+                <div ref={itemsEndRef} />
             </div>
         </div>
 
