@@ -2,71 +2,66 @@
 
 import { Service } from "@/src/app/types/service";
 import ServiceGrid from "./ServiceGrid";
-import { useSaleStore } from "@/src/app/store/saleStore";
+import { useSaleStore, DraftMaterial } from "@/src/app/store/saleStore";
 import { useState } from "react";
 
 type Props = {
   services: Service[];
 };
 
+// Fetch suggested materials for a service
+async function fetchServiceMaterials(serviceId: string): Promise<DraftMaterial[]> {
+  try {
+    const res = await fetch(`/api/services/${serviceId}/materials`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((sm: { materialId: string; quantity: number; material: { name: string; unit: string } }) => ({
+      materialId: sm.materialId,
+      name: sm.material.name,
+      unit: sm.material.unit,
+      quantity: sm.quantity,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export default function ServicesSection({ services }: Props) {
-  const {
-    getActiveDraft,
-    addDraft,
-    addItemToDraft,
-  } = useSaleStore();
+  const getActiveDraft = useSaleStore((state) => state.getActiveDraft);
+  const createDraft = useSaleStore((state) => state.createDraft);
+  const addItemToDraft = useSaleStore((state) => state.addItemToDraft);
+  const isLoading = useSaleStore((state) => state.isLoading);
 
   const [isCreating, setIsCreating] = useState(false);
 
   const handleSelectService = async (service: Service) => {
     const activeDraft = getActiveDraft();
+
+    // Fetch materials for this service
+    const materials = await fetchServiceMaterials(service.id);
     
-    // CASE 1: No active draft → create one
+    // CASE 1: No active draft → create one then add item
     if (!activeDraft) {
       setIsCreating(true);
 
       try {
+        // TODO: Get actual branchId and staffId from context/auth
         const branchId = "da6479ee-99e4-495e-bf62-0ab4dc6d4dea";
         const staffId = "staff-001";
 
-        const response = await fetch("/api/sales", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const newDraft = await createDraft(branchId, staffId);
+        
+        if (newDraft) {
+          // Add the service to the newly created draft (optimistic, no await)
+          addItemToDraft(newDraft.id, {
             serviceId: service.id,
-            branchId,
-            staffId,
-            basePrice: service.price,
-            addOns: 0,
-            total: service.price,
-
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to create sale");
+            name: service.name,
+            price: service.price,
+            qty: 1,
+            durationMin: service.durationMin ?? undefined,
+            materials,
+          });
         }
-
-        const newSale = await response.json();
-
-        // Add to draft store (temporary)
-        addDraft({
-          ...newSale,
-          status: 'active',
-          isPaid: false,
-          subtotal: service.price,
-          total: service.price,
-          items: [
-            {
-              id: crypto.randomUUID(),
-              serviceId: service.id,
-              name: service.name,
-              price: service.price,
-              qty: 1,
-              durationMin: service.durationMin,
-            },
-          ],
-        });
       } catch (err) {
         console.error(err);
         alert("Failed to create draft sale");
@@ -77,14 +72,14 @@ export default function ServicesSection({ services }: Props) {
       return;
     }
 
-    // CASE 2: Active draft exists → append service
+    // CASE 2: Active draft exists → append service (optimistic, no await)
     addItemToDraft(activeDraft.id, {
-      id: crypto.randomUUID(),
       serviceId: service.id,
       name: service.name,
       price: service.price,
       qty: 1,
-      durationMin: service.durationMin,
+      durationMin: service.durationMin ?? undefined,
+      materials,
     });
   };
 
@@ -97,12 +92,11 @@ export default function ServicesSection({ services }: Props) {
         onSelectService={handleSelectService}
       />
 
-      {isCreating && (
+      {(isCreating || isLoading) && (
         <div className="mt-3 text-sm text-slate-500">
-          Creating draft…
+          {isCreating ? "Creating draft…" : "Saving…"}
         </div>
       )}
     </div>
   );
 }
-

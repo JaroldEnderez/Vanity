@@ -4,6 +4,11 @@ export async function getAllServices() {
   return db.service.findMany({
     where: { isActive: true },
     orderBy: { name: "asc" },
+    include: {
+      materials: {
+        include: { material: true },
+      },
+    },
   });
 }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSaleStore, DraftSale, DraftStatus } from "@/src/app/store/saleStore";
 import StartSaleButton from "./StartSaleButton";
-import { Pencil, Check, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X } from "lucide-react";
 
 type Props = {
   title?: string;
@@ -36,26 +36,36 @@ function StatusBadge({ status }: { status: DraftStatus }) {
 
 export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [mounted, setMounted] = useState(false);
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [showPayConfirmation, setShowPayConfirmation] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [cashReceived, setCashReceived] = useState<string>("");
 
-    const getActiveDraft = useSaleStore((state) => state.getActiveDraft);
-    const updateDraftName = useSaleStore((state) => state.updateDraftName);
-    const removeDraft = useSaleStore((state) => state.removeDraft);
+    // Subscribe to draftSales and activeDraftId to trigger re-renders on changes
+    const draftSales = useSaleStore((state) => state.draftSales);
+    const activeDraftId = useSaleStore((state) => state.activeDraftId);
+    const updateItemMaterial = useSaleStore((state) => state.updateItemMaterial);
+    const removeItemFromDraft = useSaleStore((state) => state.removeItemFromDraft);
+    const checkoutDraft = useSaleStore((state) => state.checkoutDraft);
     
-    const activeDraft = getActiveDraft();
+    // Compute active draft from subscribed data
+    const activeDraft = activeDraftId 
+      ? draftSales.find((d) => d.id === activeDraftId) || null 
+      : null;
 
-    const currentTitle = activeDraft?.name || title;
-    const [editedTitle, setEditedTitle] = useState(currentTitle);
-
-    useEffect(() => {
-        setEditedTitle(currentTitle);
-    }, [currentTitle]);
+    // Calculate change
+    const cashAmount = parseFloat(cashReceived) || 0;
+    const changeAmount = cashAmount - (activeDraft?.total || 0);
+    const isValidPayment = cashAmount >= (activeDraft?.total || 0) && cashAmount > 0;
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // Reset cash when draft changes
+    useEffect(() => {
+        setCashReceived("");
+        setShowPayConfirmation(false);
+    }, [activeDraftId]);
 
     if (!mounted) return null;
 
@@ -74,46 +84,20 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
 
     const startedTime = new Date(activeDraft.createdAt).toLocaleTimeString();
 
-    const handleSaveTitle = () => {
-        if (activeDraft) {
-            updateDraftName(activeDraft.id, editedTitle);
-        }
-        setIsEditingTitle(false);
-    };
-
     const handleConfirmPayment = async () => {
-        if (!activeDraft) return;
+        if (!activeDraft || !isValidPayment) return;
 
         setIsProcessing(true);
         try {
-            // 1. Create sale in database
-            const createRes = await fetch('/api/sales', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    branchId: activeDraft.branchId,
-                    staffId: activeDraft.staffId,
-                    services: activeDraft.items.map((item) => ({
-                        serviceId: item.serviceId,
-                        qty: item.qty,
-                        price: item.price,
-                    })),
-                }),
-            });
+            // Checkout the session (marks as COMPLETED, deducts inventory)
+            const success = await checkoutDraft(activeDraft.id, cashAmount);
+            
+            if (!success) {
+                throw new Error('Failed to checkout');
+            }
 
-            if (!createRes.ok) throw new Error('Failed to create sale');
-            const sale = await createRes.json();
-
-            // 2. Checkout (mark as COMPLETED)
-            const checkoutRes = await fetch(`/api/sales/${sale.id}/checkout`, {
-                method: 'POST',
-            });
-
-            if (!checkoutRes.ok) throw new Error('Failed to checkout sale');
-
-            // 3. Remove from Zustand (it's now persisted in DB)
-            removeDraft(activeDraft.id);
             setShowPayConfirmation(false);
+            setCashReceived("");
         } catch (error) {
             console.error('Payment failed:', error);
             alert('Failed to process payment. Please try again.');
@@ -122,121 +106,195 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         }
     };
 
+    const handleMaterialChange = (materialId: string, quantity: number) => {
+        if (activeDraft) {
+            updateItemMaterial(activeDraft.id, materialId, quantity);
+        }
+    };
+
     return (
-        <div className="space-y-4">
-        <div className="flex items-center gap-2">
-            {isEditingTitle ? (
-                <>
-                    <input
-                        type="text"
-                        value={editedTitle}
-                        onChange={(e) => setEditedTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveTitle();
-                            if (e.key === 'Escape') {
-                                setEditedTitle(currentTitle);
-                                setIsEditingTitle(false);
-                            }
-                        }}
-                        className="text-lg font-semibold bg-white border border-slate-300 rounded px-2 py-1 flex-1"
-                        autoFocus
-                    />
-                    <button
-                        onClick={handleSaveTitle}
-                        className="p-1 hover:bg-slate-100 rounded"
-                    >
-                        <Check size={18} className="text-green-600" />
-                    </button>
-                </>
-            ) : (
-                <>
-                    <div className="flex gap-x-2">
-                        <h3 className="text-lg font-semibold flex-1">{editedTitle}</h3>
-                        <button
-                            onClick={() => setIsEditingTitle(true)}
-                            className="p-1 hover:bg-slate-100 rounded"
-                        >
-                            <Pencil size={16} className="text-slate-500" />
-                        </button>
+        <div className="h-full flex flex-col">
+        {/* Scrollable services section */}
+        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+            <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Started:</span>
+                <span className="font-medium">{startedTime}</span>
+            </div>
+
+            <div className="space-y-2">
+                <h4 className="font-medium">Services</h4>
+                {activeDraft.items.length === 0 && (
+                  <p className="text-sm text-slate-500 py-2">No services added yet. Click a service to add it.</p>
+                )}
+                {activeDraft.items.map((item) => (
+                <div key={item.id} className="rounded bg-slate-100 p-3 space-y-2 group relative">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="font-medium">{item.name}</div>
+                        <div className="text-xs text-slate-500">
+                          ₱{item.price} × {item.qty}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm font-medium">₱{(item.price * item.qty).toFixed(2)}</span>
+                        {!activeDraft.isPaid && (
+                          <button
+                            onClick={() => removeItemFromDraft(activeDraft.id, item.id)}
+                            className="p-1 hover:bg-red-100 rounded text-slate-400 hover:text-red-500 transition"
+                            title="Remove service"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                </>
-            )}
+
+                    {/* Materials used */}
+                    {item.materials && item.materials.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-200">
+                        <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
+                          <Package size={12} />
+                          <span>Materials</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {item.materials.map((material) => (
+                            <div key={material.materialId} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-700">{material.name}</span>
+                              <div className="flex items-center gap-1">
+                                {!activeDraft.isPaid && (
+                                  <>
+                                    <button
+                                      onClick={() => handleMaterialChange(material.materialId, material.quantity - 1)}
+                                      className="p-0.5 hover:bg-slate-200 rounded"
+                                      disabled={material.quantity <= 1}
+                                    >
+                                      <ChevronDown size={14} className="text-slate-500" />
+                                    </button>
+                                    <input
+                                      type="number"
+                                      value={material.quantity}
+                                      onChange={(e) => handleMaterialChange(material.materialId, parseFloat(e.target.value) || 1)}
+                                      step="1"
+                                      min="1"
+                                      className="w-12 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    <button
+                                      onClick={() => handleMaterialChange(material.materialId, material.quantity + 1)}
+                                      className="p-0.5 hover:bg-slate-200 rounded"
+                                    >
+                                      <ChevronUp size={14} className="text-slate-500" />
+                                    </button>
+                                  </>
+                                )}
+                                {activeDraft.isPaid && (
+                                  <span className="font-medium">{material.quantity}</span>
+                                )}
+                                <span className="text-slate-500 text-xs ml-1">{material.unit}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                </div>
+                ))}
+            </div>
         </div>
 
-        <div className="flex justify-between text-sm">
-            <span className="text-slate-600">Started:</span>
-            <span className="font-medium">{startedTime}</span>
-        </div>
-
-        <div className="space-y-2">
-            <h4 className="font-medium">Services</h4>
-            {activeDraft.items.map((item) => (
-            <div key={item.id} className="rounded bg-slate-300 p-2">
-                <div className="font-medium">{item.name}</div>
-                <div className="text-xs text-slate-500">
-                ₱{item.price} × {item.qty}
+        {/* Fixed bottom section */}
+        <div className="flex-shrink-0 border-t bg-slate-50 pt-3 space-y-3">
+            <div className="text-sm">
+                <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>₱{activeDraft.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-base">
+                    <span>Total</span>
+                    <span>₱{activeDraft.total.toFixed(2)}</span>
                 </div>
             </div>
-            ))}
+
+            {/* Status and Actions */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Status:</span>
+                  <StatusBadge status={getComputedStatus(activeDraft)} />
+                </div>
+
+                {!activeDraft.isPaid && activeDraft.items.length > 0 && (
+                  <div className="space-y-3">
+                    {/* Cash Input */}
+                    <div className="space-y-2">
+                      <label className="text-sm text-slate-600">Cash Received</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">₱</span>
+                        <input
+                          type="number"
+                          value={cashReceived}
+                          onChange={(e) => setCashReceived(e.target.value)}
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                      </div>
+                      {/* Insufficient tooltip - only show when cash entered is less than total */}
+                      {cashAmount > 0 && !isValidPayment && (
+                        <p className="text-xs text-red-500">
+                          Insufficient amount (need ₱{(activeDraft.total - cashAmount).toFixed(2)} more)
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Mark as Paid Button */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowPayConfirmation(true)}
+                        disabled={!isValidPayment}
+                        className="w-full rounded-lg bg-green-600 py-3 text-white font-semibold transition hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Mark as Paid
+                      </button>
+
+                      {/* Inline confirmation popover */}
+                      {showPayConfirmation && isValidPayment && (
+                        <div className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                          <div className="text-sm text-slate-600 mb-3 space-y-1">
+                            <div className="flex justify-between">
+                              <span>Total:</span>
+                              <span className="font-medium">₱{activeDraft.total.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Cash:</span>
+                              <span className="font-medium">₱{cashAmount.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-green-600 font-semibold">
+                              <span>Change:</span>
+                              <span>₱{changeAmount.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setShowPayConfirmation(false)}
+                              className="flex-1 px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-100 transition"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleConfirmPayment}
+                              disabled={isProcessing}
+                              className="flex-1 px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50"
+                            >
+                              {isProcessing ? '...' : 'Confirm'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+            </div>
         </div>
-
-        <div className="border-t pt-3 text-sm">
-            <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>₱{activeDraft.subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-semibold">
-            <span>Total</span>
-            <span>₱{activeDraft.total.toFixed(2)}</span>
-            </div>
-        </div>
-
-        {/* Status and Actions */}
-        <div className="border-t pt-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Status:</span>
-              <StatusBadge status={getComputedStatus(activeDraft)} />
-            </div>
-
-            {!activeDraft.isPaid && activeDraft.items.length > 0 && (
-              <button
-                onClick={() => setShowPayConfirmation(true)}
-                className="w-full rounded-lg bg-green-600 py-3 text-white font-semibold transition hover:bg-green-700"
-              >
-                Mark as Paid
-              </button>
-            )}
-        </div>
-
-        {showPayConfirmation && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full mx-4">
-              <h3 className="text-lg font-semibold mb-2">Confirm Payment</h3>
-              <p className="text-slate-600 text-sm mb-6">
-                Mark this sale as paid? This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowPayConfirmation(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmPayment}
-                  disabled={isProcessing}
-                  className="flex-1 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isProcessing ? 'Processing...' : 'Confirm'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-
-        }
         </div>
     );
 }
-
-

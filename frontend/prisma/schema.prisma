@@ -83,6 +83,7 @@ model Sale {
   branchId   String
   staffId    String
   customerId String?
+  name       String?       // Custom name for the draft/session
 
   status     SaleStatus    @default(DRAFT)
 
@@ -90,7 +91,11 @@ model Sale {
   addOns     Float         @default(0)
   total      Float         @default(0)
 
+  cashReceived Float?      // Cash given by customer
+  changeGiven  Float?      // Change returned to customer
+
   createdAt  DateTime      @default(now())
+  updatedAt  DateTime?
   endedAt    DateTime?
 
   saleServices SaleService[]
