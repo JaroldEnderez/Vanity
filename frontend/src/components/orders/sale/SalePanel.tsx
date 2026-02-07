@@ -3,7 +3,14 @@
 import { useEffect, useState, useRef } from "react";
 import { useSaleStore, DraftSale, DraftStatus } from "@/src/app/store/saleStore";
 import StartSaleButton from "./StartSaleButton";
-import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X } from "lucide-react";
+import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X, User } from "lucide-react";
+
+// Staff type for dropdown
+type Staff = {
+  id: string;
+  name: string;
+  role: string | null;
+};
 
 type Props = {
   title?: string;
@@ -40,6 +47,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [cashReceived, setCashReceived] = useState<string>("");
     const [newItemId, setNewItemId] = useState<string | null>(null);
+    const [stylists, setStylists] = useState<Staff[]>([]);
     
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const itemsEndRef = useRef<HTMLDivElement>(null);
@@ -48,6 +56,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const draftSales = useSaleStore((state) => state.draftSales);
     const activeDraftId = useSaleStore((state) => state.activeDraftId);
     const updateItemMaterial = useSaleStore((state) => state.updateItemMaterial);
+    const updateDraftStaff = useSaleStore((state) => state.updateDraftStaff);
     const removeItemFromDraft = useSaleStore((state) => state.removeItemFromDraft);
     const checkoutDraft = useSaleStore((state) => state.checkoutDraft);
     
@@ -66,6 +75,11 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
 
     useEffect(() => {
         setMounted(true);
+        // Fetch stylists
+        fetch("/api/staff?stylists=true")
+            .then((res) => res.json())
+            .then((data) => setStylists(data))
+            .catch((err) => console.error("Failed to fetch stylists:", err));
     }, []);
 
     // Reset cash when draft changes
@@ -104,10 +118,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         <div className="space-y-4">
             <h3 className="text-lg font-semibold">{title}</h3>
             <p className="text-sm text-slate-500">No active draft</p>
-            <StartSaleButton 
-                branchId="da6479ee-99e4-495e-bf62-0ab4dc6d4dea"
-                staffId="staff-001"
-            />
+            <StartSaleButton staffId="staff-001" />
         </div>
         );
     }
@@ -145,9 +156,39 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     return (
         <div className="h-full flex flex-col">
         {/* Sticky header */}
-        <div className="flex-shrink-0 flex justify-between text-sm pb-3 border-b mb-3 bg-slate-50">
+        <div className="flex-shrink-0 pb-3 border-b mb-3 bg-slate-50 space-y-2">
+          {/* Stylist dropdown */}
+          <div className="flex items-center gap-2">
+            <User size={16} className="text-slate-500" />
+            {activeDraft.isPaid ? (
+              <span className="text-sm font-medium text-slate-700">
+                {activeDraft.staffName || "No stylist assigned"}
+              </span>
+            ) : (
+              <select
+                value={activeDraft.staffId}
+                onChange={(e) => {
+                  const selectedStylist = stylists.find((s) => s.id === e.target.value);
+                  if (selectedStylist) {
+                    updateDraftStaff(activeDraft.id, selectedStylist.id, selectedStylist.name);
+                  }
+                }}
+                className="flex-1 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select stylist...</option>
+                {stylists.map((stylist) => (
+                  <option key={stylist.id} value={stylist.id}>
+                    {stylist.name} {stylist.role ? `(${stylist.role})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          {/* Started time */}
+          <div className="flex justify-between text-sm">
             <span className="text-slate-600">Started:</span>
             <span className="font-medium">{startedTime}</span>
+          </div>
         </div>
 
         {/* Scrollable services section */}

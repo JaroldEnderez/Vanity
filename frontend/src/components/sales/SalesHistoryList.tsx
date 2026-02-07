@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle, Clock, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight } from "lucide-react";
 
 type SaleService = {
   id: string;
@@ -15,6 +15,7 @@ type SaleService = {
 
 type Sale = {
   id: string;
+  name?: string | null;
   total: number;
   basePrice: number;
   addOns: number;
@@ -36,62 +37,100 @@ type Props = {
   emptyMessage?: string;
 };
 
-function SaleHistoryItem({ sale }: { sale: Sale }) {
+function formatCompletedDate(dateStr: Date | null) {
+  if (!dateStr) return "—";
+  const date = new Date(dateStr);
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  
+  if (isToday) return `Today at ${timeStr}`;
+  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${timeStr}`;
+  
+  return date.toLocaleDateString([], { month: "short", day: "numeric" }) + ` at ${timeStr}`;
+}
+
+function formatStartedDate(dateStr: Date) {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  
+  if (isToday) return `Today at ${timeStr}`;
+  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${timeStr}`;
+  
+  return date.toLocaleDateString([], { month: "short", day: "numeric" }) + ` at ${timeStr}`;
+}
+
+function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const completedTime = sale.endedAt
-    ? new Date(sale.endedAt).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      })
-    : "—";
-
-  const startedTime = new Date(sale.createdAt).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const displayName = sale.name || `Session #${index + 1}`;
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-      {/* Header - Clickable */}
-      <button
+    <div className="border-b border-slate-100 last:border-b-0">
+      {/* Main row */}
+      <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition"
+        className="flex items-center gap-4 px-6 py-4 cursor-pointer hover:bg-slate-50 transition"
       >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-green-600">
-            <CheckCircle size={18} />
+        {/* Status indicator - green for completed */}
+        <div className="w-3 h-3 rounded-full flex-shrink-0 bg-green-500" />
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-slate-900">{displayName}</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 border border-green-200 text-green-700">
+              <CheckCircle size={12} />
+              Completed
+            </span>
           </div>
-          
-          <div className="text-left">
-            <div className="font-medium text-slate-900">
-              ₱{sale.total.toFixed(2)}
-            </div>
-            <div className="text-sm text-slate-500">
-              {sale.saleServices.length} service{sale.saleServices.length !== 1 ? "s" : ""}
-            </div>
+          <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
+            <span className="font-mono text-xs text-slate-400">#{sale.id.slice(0, 8)}</span>
+            <span>•</span>
+            <span>{sale.saleServices.length} service{sale.saleServices.length !== 1 ? "s" : ""}</span>
+            {sale.staff && (
+              <>
+                <span>•</span>
+                <span>{sale.staff.name}</span>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-sm font-medium text-slate-700">{completedTime}</div>
-            <div className="text-xs text-slate-400">Completed</div>
+        {/* Total and dates on the right */}
+        <div className="text-right flex-shrink-0">
+          <div className="font-semibold text-slate-900">₱{sale.total.toFixed(2)}</div>
+          <div className="text-xs text-slate-500">
+            <span className="text-slate-400">Started:</span> {formatStartedDate(sale.createdAt)}
           </div>
-          
+          <div className="text-xs text-slate-500">
+            <span className="text-slate-400">Completed:</span> {formatCompletedDate(sale.endedAt)}
+          </div>
+        </div>
+
+        {/* Expand icon */}
+        <div className="flex-shrink-0">
           {isExpanded ? (
-            <ChevronDown size={18} className="text-slate-400" />
+            <ChevronDown size={20} className="text-slate-400" />
           ) : (
-            <ChevronRight size={18} className="text-slate-400" />
+            <ChevronRight size={20} className="text-slate-400" />
           )}
         </div>
-      </button>
+      </div>
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="border-t border-slate-200 p-4 bg-slate-50 space-y-4">
+        <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-4">
           {/* Meta Info */}
           <div className="flex gap-6 text-sm">
             <div>
@@ -101,10 +140,6 @@ function SaleHistoryItem({ sale }: { sale: Sale }) {
             <div>
               <span className="text-slate-500">Branch:</span>{" "}
               <span className="font-medium">{sale.branch?.name || "—"}</span>
-            </div>
-            <div className="flex items-center gap-1 text-slate-500">
-              <Clock size={14} />
-              <span>Started {startedTime}</span>
             </div>
           </div>
 
@@ -144,11 +179,6 @@ function SaleHistoryItem({ sale }: { sale: Sale }) {
               <span>₱{sale.total.toFixed(2)}</span>
             </div>
           </div>
-
-          {/* Sale ID */}
-          <div className="text-xs text-slate-400 font-mono">
-            ID: {sale.id}
-          </div>
         </div>
       )}
     </div>
@@ -187,9 +217,9 @@ export default function SalesHistoryList({ sales, emptyMessage = "No sales found
       </div>
 
       {/* Sales List */}
-      <div className="space-y-2">
-        {sales.map((sale) => (
-          <SaleHistoryItem key={sale.id} sale={sale} />
+      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+        {sales.map((sale, index) => (
+          <SaleHistoryItem key={sale.id} sale={sale} index={index} />
         ))}
       </div>
     </div>

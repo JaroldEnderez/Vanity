@@ -1,13 +1,6 @@
-import DashboardLayout from "./dashboard/layout";
-import OrderPage from "@/src/components/orders/OrderPage";
-import { getAllServices } from "@/src/app/lib/services";
+import { redirect } from "next/navigation";
 
-export default async function Home() {
-  const services = await getAllServices();
-
-  return (
-    <DashboardLayout>
-      <OrderPage services={services} />
-    </DashboardLayout>
-  );
+export default function Home() {
+  // Redirect to dashboard - auth middleware will handle login redirect
+  redirect("/dashboard/orders");
 }

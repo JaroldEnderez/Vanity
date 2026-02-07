@@ -14,13 +14,24 @@ generator client {
 
 
 model Branch {
-  id        String    @id @default(uuid())
-  name      String    @unique
+  id        String          @id @default(uuid())
+  name      String          @unique
   address   String
-  createdAt DateTime  @default(now())
+  createdAt DateTime        @default(now())
   sales     Sale[]
   services  Service[]
   staff     Staff[]
+  account   BranchAccount?  // One login account per branch
+}
+
+// Simple auth: one account per branch
+model BranchAccount {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Hashed password
+  branchId  String   @unique
+  createdAt DateTime @default(now())
+  branch    Branch   @relation(fields: [branchId], references: [id])
 }
 
 model Staff {

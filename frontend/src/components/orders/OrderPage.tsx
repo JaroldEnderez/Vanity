@@ -11,18 +11,26 @@ import { Loader2, Pencil, Check, X } from "lucide-react";
 
 type Props = {
   services: Service[];
+  defaultStaffId: string;
 };
 
 // Editable header component for drawer
 function DrawerHeader({ draft }: { draft: DraftSale | null }) {
   const updateDraftName = useSaleStore((state) => state.updateDraftName);
+  const draftSales = useSaleStore((state) => state.draftSales);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedName, setEditedName] = useState(draft?.name || "Session");
+  
+  // Find index for fallback name
+  const draftIndex = draft ? draftSales.findIndex(d => d.id === draft.id) : -1;
+  const defaultName = draftIndex >= 0 ? `Session #${draftIndex + 1}` : "Session";
+  const [editedName, setEditedName] = useState(draft?.name || defaultName);
 
   // Sync editedName when draft changes
   useEffect(() => {
-    setEditedName(draft?.name || "Session");
-  }, [draft?.name, draft?.id]);
+    const currentIndex = draft ? draftSales.findIndex(d => d.id === draft.id) : -1;
+    const currentDefault = currentIndex >= 0 ? `Session #${currentIndex + 1}` : "Session";
+    setEditedName(draft?.name || currentDefault);
+  }, [draft?.name, draft?.id, draftSales]);
 
   if (!draft) return null;
 
@@ -32,7 +40,9 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
   };
 
   const handleCancel = () => {
-    setEditedName(draft.name || "Session");
+    const currentIndex = draft ? draftSales.findIndex(d => d.id === draft.id) : -1;
+    const currentDefault = currentIndex >= 0 ? `Session #${currentIndex + 1}` : "Session";
+    setEditedName(draft?.name || currentDefault);
     setIsEditing(false);
   };
 
@@ -72,7 +82,7 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
         ) : (
           <>
             <h2 className="text-lg font-semibold text-slate-900">
-              {draft.name || "Session"}
+              {draft.name || defaultName}
             </h2>
             <button
               onClick={() => setIsEditing(true)}
@@ -94,10 +104,7 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
   );
 }
 
-export default function OrderPage({ services }: Props) {
-  // TODO: Get these from auth/context
-  const branchId = "da6479ee-99e4-495e-bf62-0ab4dc6d4dea";
-  const staffId = "staff-001";
+export default function OrderPage({ services, defaultStaffId }: Props) {
 
   const isInitialized = useSaleStore((state) => state.isInitialized);
   const loadDraftsFromDB = useSaleStore((state) => state.loadDraftsFromDB);
@@ -133,7 +140,7 @@ export default function OrderPage({ services }: Props) {
     <div className="h-full flex">
       {/* Session List - Main Content */}
       <div className="flex-1 bg-white">
-        <SessionList branchId={branchId} staffId={staffId} />
+        <SessionList staffId={defaultStaffId} />
       </div>
 
       {/* Session Drawer */}
@@ -146,7 +153,7 @@ export default function OrderPage({ services }: Props) {
         <div className="h-full flex">
           {/* Services Grid */}
           <div className="flex-1 p-6 overflow-y-auto border-r">
-            <ServicesSection services={services} />
+            <ServicesSection services={services} staffId={defaultStaffId} />
           </div>
 
           {/* Session Panel */}

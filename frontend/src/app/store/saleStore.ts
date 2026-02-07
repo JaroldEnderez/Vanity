@@ -30,6 +30,7 @@ export type DraftSale = {
   id: string;
   branchId: string;
   staffId: string;
+  staffName?: string;
   name?: string;
   status: DraftStatus;
   isPaid: boolean;
@@ -46,16 +47,17 @@ type SaleStore = {
   isInitialized: boolean;
   isSaving: boolean;
 
-  // Computed getter for active draft
+  // Computed getter for active drafth
   getActiveDraft: () => DraftSale | null;
 
   // Initialization (load from DB)
   loadDraftsFromDB: () => Promise<void>;
 
   // Draft management
-  createDraft: (branchId: string, staffId: string, name?: string) => Promise<DraftSale | null>;
+  createDraft: (staffId: string, name?: string) => Promise<DraftSale | null>;
   setActiveDraft: (draftId: string | null) => void;
   updateDraftName: (draftId: string, name: string) => void;
+  updateDraftStaff: (draftId: string, staffId: string, staffName: string) => void;
   removeDraft: (draftId: string) => void;
   clearAllDrafts: () => void;
 
@@ -123,6 +125,7 @@ function dbSessionToDraft(session: any): DraftSale {
     id: session.id,
     branchId: session.branchId,
     staffId: session.staffId,
+    staffName: session.staff?.name || undefined,
     name: session.name || undefined,
     status: "active",
     isPaid: false,
@@ -241,13 +244,17 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
     }
   },
 
-  createDraft: async (branchId, staffId, name) => {
+  createDraft: async (staffId, name) => {
     set({ isLoading: true });
     try {
+      // Generate default name if not provided
+      const state = get();
+      const defaultName = name || `Session #${state.draftSales.length + 1}`;
+
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branchId, staffId, name }),
+        body: JSON.stringify({ staffId, name: defaultName }),
       });
 
       if (!res.ok) throw new Error("Failed to create session");
@@ -293,6 +300,28 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
+      });
+    });
+  },
+
+  // Optimistic + debounced
+  updateDraftStaff: (draftId, staffId, staffName) => {
+    // Immediate UI update
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = { ...updatedDrafts[draftIndex], staffId, staffName };
+      return { draftSales: updatedDrafts };
+    });
+
+    // Queue debounced save
+    queueSave(draftId, async () => {
+      await fetch(`/api/sessions/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId }),
       });
     });
   },

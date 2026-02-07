@@ -62,12 +62,13 @@ export async function createSession(data: {
   });
 }
 
-// UPDATE session (name, customer, etc.)
+// UPDATE session (name, customer, staff, etc.)
 export async function updateSession(
   id: string,
   data: Partial<{
     name: string;
     customerId: string;
+    staffId: string;
   }>
 ) {
   return db.sale.update({

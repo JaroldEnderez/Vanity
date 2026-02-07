@@ -1,7 +1,49 @@
 import { db } from "@/src/app/lib/db";
+import bcrypt from "bcryptjs";
+
+// Helper to create or find branch account
+async function upsertBranchAccount(email: string, password: string, branchId: string) {
+    const existing = await db.branchAccount.findFirst({
+        where: { branchId },
+    });
+    if (existing) return existing;
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    return db.branchAccount.create({
+        data: { email, password: hashedPassword, branchId },
+    });
+}
+
+// Helper to create or find staff
+async function upsertStaff(name: string, role: string, branchId: string) {
+    const existing = await db.staff.findFirst({
+        where: { name, branchId },
+    });
+    if (existing) return existing;
+    return db.staff.create({
+        data: { name, role, branchId },
+    });
+}
+
+// Helper to create or find customer
+async function upsertCustomer(name: string, phone?: string) {
+    if (phone) {
+        const existing = await db.customer.findFirst({
+            where: { phone },
+        });
+        if (existing) return existing;
+    }
+    const existingByName = await db.customer.findFirst({
+        where: { name },
+    });
+    if (existingByName) return existingByName;
+    return db.customer.create({
+        data: { name, phone },
+    });
+}
 
 async function main(){
-    console.log("Seeding branches and staff...")
+    console.log("Seeding branches...")
     
     // Create branches with distinct names
     const branches = await Promise.all([
@@ -33,79 +75,62 @@ async function main(){
 
     console.log(`Created ${branches.length} branches`);
 
-    // Create staff with unique names for each branch
-    const staff = await Promise.all([
-        // Downtown Plaza staff
-        db.staff.create({
-            data: {
-                name: "Maria Santos",
-                role: "Senior Stylist",
-                branchId: branches[0].id,
-            }
-        }),
-        db.staff.create({
-            data: {
-                name: "James Rodriguez",
-                role: "Cashier",
-                branchId: branches[0].id,
-            }
-        }),
-        db.staff.create({
-            data: {
-                name: "Sophia Chen",
-                role: "Color Specialist",
-                branchId: branches[0].id,
-            }
-        }),
-
-        // Mall of Elegance staff
-        db.staff.create({
-            data: {
-                name: "David Kim",
-                role: "Master Stylist",
-                branchId: branches[1].id,
-            }
-        }),
-        db.staff.create({
-            data: {
-                name: "Emma Wilson",
-                role: "Receptionist",
-                branchId: branches[1].id,
-            }
-        }),
-        db.staff.create({
-            data: {
-                name: "Michael Brown",
-                role: "Hair Technician",
-                branchId: branches[1].id,
-            }
-        }),
-
-        // Riverside Salon staff
-        db.staff.create({
-            data: {
-                name: "Isabella Garcia",
-                role: "Lead Stylist",
-                branchId: branches[2].id,
-            }
-        }),
-        db.staff.create({
-            data: {
-                name: "Alexander Taylor",
-                role: "Cashier",
-                branchId: branches[2].id,
-            }
-        }),
-        db.staff.create({
-            data: {
-                name: "Olivia Martinez",
-                role: "Nail Specialist",
-                branchId: branches[2].id,
-            }
-        }),
+    // ============================================
+    // BRANCH ACCOUNTS (one login per branch)
+    // ============================================
+    console.log("Seeding branch accounts...")
+    
+    const accounts = await Promise.all([
+        upsertBranchAccount("downtown@vanity.com", "password123", branches[0].id),
+        upsertBranchAccount("mall@vanity.com", "password123", branches[1].id),
+        upsertBranchAccount("riverside@vanity.com", "password123", branches[2].id),
     ]);
 
-    console.log(`Created ${staff.length} staff members`);
+    console.log(`Created ${accounts.length} branch accounts`);
+
+    // ============================================
+    // STYLISTS (5 stylists across branches)
+    // ============================================
+    console.log("Seeding stylists...")
+    
+    const stylists = await Promise.all([
+        upsertStaff("Maria Santos", "Senior Stylist", branches[0].id),
+        upsertStaff("David Kim", "Master Stylist", branches[1].id),
+        upsertStaff("Isabella Garcia", "Lead Stylist", branches[2].id),
+        upsertStaff("Sophia Chen", "Color Specialist", branches[0].id),
+        upsertStaff("Michael Brown", "Hair Technician", branches[1].id),
+    ]);
+
+    console.log(`Created ${stylists.length} stylists`);
+
+    // ============================================
+    // OTHER STAFF (cashiers, receptionists)
+    // ============================================
+    console.log("Seeding other staff...")
+    
+    const otherStaff = await Promise.all([
+        upsertStaff("James Rodriguez", "Cashier", branches[0].id),
+        upsertStaff("Emma Wilson", "Receptionist", branches[1].id),
+        upsertStaff("Alexander Taylor", "Cashier", branches[2].id),
+        upsertStaff("Olivia Martinez", "Nail Specialist", branches[2].id),
+    ]);
+
+    console.log(`Created ${otherStaff.length} other staff members`);
+
+    // ============================================
+    // CUSTOMERS (5 customers)
+    // ============================================
+    console.log("Seeding customers...")
+    
+    const customers = await Promise.all([
+        upsertCustomer("Ana Reyes", "09171234567"),
+        upsertCustomer("Carlos Mendoza", "09182345678"),
+        upsertCustomer("Patricia Lim", "09193456789"),
+        upsertCustomer("Roberto Cruz", "09204567890"),
+        upsertCustomer("Diana Santos", "09215678901"),
+    ]);
+
+    console.log(`Created ${customers.length} customers`);
 
     console.log("Seeding services...")
 
@@ -132,7 +157,13 @@ async function main(){
     console.log("Services seeded.")
     console.log("\n=== Summary ===")
     console.log(`Branches: ${branches.map(b => b.name).join(", ")}`)
-    console.log(`Staff: ${staff.map(s => `${s.name} (${s.role})`).join(", ")}`)
+    console.log(`\nBranch Login Accounts (password: password123):`)
+    accounts.forEach((acc, i) => {
+        console.log(`  - ${branches[i].name}: ${acc.email}`)
+    });
+    console.log(`\nStylists: ${stylists.map(s => `${s.name} (${s.role})`).join(", ")}`)
+    console.log(`Other Staff: ${otherStaff.map(s => `${s.name} (${s.role})`).join(", ")}`)
+    console.log(`Customers: ${customers.map(c => c.name).join(", ")}`)
 }
 
 main()

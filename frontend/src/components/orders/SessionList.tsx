@@ -5,7 +5,6 @@ import { Plus, Loader2, Clock, CheckCircle, AlertTriangle, Trash2, ChevronRight 
 import { useState } from "react";
 
 type Props = {
-  branchId: string;
   staffId: string;
 };
 
@@ -37,7 +36,7 @@ function getStatusConfig(draft: DraftSale) {
   };
 }
 
-export default function SessionList({ branchId, staffId }: Props) {
+export default function SessionList({ staffId }: Props) {
   const draftSales = useSaleStore((state) => state.draftSales);
   const activeDraftId = useSaleStore((state) => state.activeDraftId);
   const isLoading = useSaleStore((state) => state.isLoading);
@@ -48,7 +47,7 @@ export default function SessionList({ branchId, staffId }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    await createDraft(branchId, staffId);
+    await createDraft(staffId);
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {

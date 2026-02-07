@@ -16,9 +16,20 @@ export async function getServices(branchId?: string) {
   return db.service.findMany({
     where: {
       isActive: true,
-      ...(branchId ? { branchId } : {}),
+      // Show services that belong to this branch OR are shared (no branchId)
+      ...(branchId ? { 
+        OR: [
+          { branchId },
+          { branchId: null }
+        ]
+      } : {}),
     },
     orderBy: { name: "asc" },
+    include: {
+      materials: {
+        include: { material: true },
+      },
+    },
   });
 }
 

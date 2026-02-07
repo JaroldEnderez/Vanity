@@ -7,6 +7,7 @@ import { useState } from "react";
 
 type Props = {
   services: Service[];
+  staffId: string;
 };
 
 // Fetch suggested materials for a service
@@ -26,7 +27,7 @@ async function fetchServiceMaterials(serviceId: string): Promise<DraftMaterial[]
   }
 }
 
-export default function ServicesSection({ services }: Props) {
+export default function ServicesSection({ services, staffId }: Props) {
   const getActiveDraft = useSaleStore((state) => state.getActiveDraft);
   const createDraft = useSaleStore((state) => state.createDraft);
   const addItemToDraft = useSaleStore((state) => state.addItemToDraft);
@@ -45,11 +46,7 @@ export default function ServicesSection({ services }: Props) {
       setIsCreating(true);
 
       try {
-        // TODO: Get actual branchId and staffId from context/auth
-        const branchId = "da6479ee-99e4-495e-bf62-0ab4dc6d4dea";
-        const staffId = "staff-001";
-
-        const newDraft = await createDraft(branchId, staffId);
+        const newDraft = await createDraft(staffId);
         
         if (newDraft) {
           // Add the service to the newly created draft (optimistic, no await)
