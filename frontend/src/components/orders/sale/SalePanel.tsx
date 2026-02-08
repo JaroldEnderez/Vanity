@@ -156,7 +156,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     return (
         <div className="h-full flex flex-col">
         {/* Sticky header */}
-        <div className="flex-shrink-0 pb-3 border-b mb-3 bg-slate-50 space-y-2">
+        <div className="flex-shrink-0 pb-2 md:pb-3 border-b mb-2 md:mb-3 bg-slate-50 space-y-2 px-2 md:px-0">
           {/* Stylist dropdown */}
           <div className="flex items-center gap-2">
             <User size={16} className="text-slate-500" />
@@ -192,28 +192,28 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         </div>
 
         {/* Scrollable services section */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-4">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-4 px-2 md:px-0">
             <div className="space-y-2">
-                <h4 className="font-medium">Services</h4>
+                <h4 className="font-medium text-sm md:text-base">Services</h4>
                 {activeDraft.items.length === 0 && (
                   <p className="text-sm text-slate-500 py-2">No services added yet. Click a service to add it.</p>
                 )}
                 {activeDraft.items.map((item) => (
                 <div 
                   key={item.id} 
-                  className={`rounded bg-slate-100 p-3 space-y-2 group relative transition-all duration-300 ${
+                  className={`rounded bg-slate-100 p-2 md:p-3 space-y-2 group relative transition-all duration-300 ${
                     newItemId === item.id ? 'animate-highlight ring-2 ring-green-400 ring-opacity-75' : ''
                   }`}
                 >
                     <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="font-medium">{item.name}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm md:text-base truncate">{item.name}</div>
                         <div className="text-xs text-slate-500">
                           ₱{item.price} × {item.qty}
                         </div>
                       </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-sm font-medium">₱{(item.price * item.qty).toFixed(2)}</span>
+                      <div className="flex items-start gap-2 flex-shrink-0">
+                        <span className="text-xs md:text-sm font-medium">₱{(item.price * item.qty).toFixed(2)}</span>
                         {!activeDraft.isPaid && (
                           <button
                             onClick={() => removeItemFromDraft(activeDraft.id, item.id)}
@@ -281,32 +281,32 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         </div>
 
         {/* Fixed bottom section */}
-        <div className="flex-shrink-0 border-t bg-slate-50 pt-3 space-y-3">
-            <div className="text-sm">
+        <div className="flex-shrink-0 border-t bg-slate-50 pt-2 md:pt-3 space-y-2 md:space-y-3 px-2 md:px-0">
+            <div className="text-xs md:text-sm">
                 <div className="flex justify-between">
                     <span>Subtotal</span>
                     <span>₱{activeDraft.subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-semibold text-base">
+                <div className="flex justify-between font-semibold text-sm md:text-base">
                     <span>Total</span>
                     <span>₱{activeDraft.total.toFixed(2)}</span>
                 </div>
             </div>
 
             {/* Status and Actions */}
-            <div className="space-y-3">
+            <div className="space-y-2 md:space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Status:</span>
+                  <span className="text-xs md:text-sm text-slate-600">Status:</span>
                   <StatusBadge status={getComputedStatus(activeDraft)} />
                 </div>
 
                 {!activeDraft.isPaid && activeDraft.items.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-2 md:space-y-3">
                     {/* Cash Input */}
-                    <div className="space-y-2">
-                      <label className="text-sm text-slate-600">Cash Received</label>
+                    <div className="space-y-1.5 md:space-y-2">
+                      <label className="text-xs md:text-sm text-slate-600">Cash Received</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">₱</span>
+                        <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">₱</span>
                         <input
                           type="number"
                           value={cashReceived}
@@ -314,12 +314,12 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                           placeholder="0.00"
                           min="0"
                           step="0.01"
-                          className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="w-full pl-7 md:pl-8 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </div>
                       {/* Insufficient tooltip - only show when cash entered is less than total */}
                       {cashAmount > 0 && !isValidPayment && (
-                        <p className="text-xs text-red-500">
+                        <p className="text-[10px] md:text-xs text-red-500">
                           Insufficient amount (need ₱{(activeDraft.total - cashAmount).toFixed(2)} more)
                         </p>
                       )}
@@ -330,7 +330,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                       <button
                         onClick={() => setShowPayConfirmation(true)}
                         disabled={!isValidPayment}
-                        className="w-full rounded-lg bg-green-600 py-3 text-white font-semibold transition hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full rounded-lg bg-green-600 py-2 md:py-3 text-sm md:text-base text-white font-semibold transition hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Mark as Paid
                       </button>

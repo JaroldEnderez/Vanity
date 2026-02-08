@@ -1,10 +1,57 @@
 import { NextResponse } from "next/server";
-import { getAllSales, createSale } from "@/src/app/lib/sales";
+import { getAllSales, createSale, getCompletedSales } from "@/src/app/lib/sales";
+import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { db } from "@/src/app/lib/db";
+import { SaleStatus } from "@prisma/client";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const sales = await getAllSales();
-    return NextResponse.json(sales);
+    const branchId = await getAuthBranchId();
+    if (!branchId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
+
+    // If date range is provided, use getCompletedSales with filtering
+    if (startDateParam && endDateParam) {
+      const startDate = new Date(startDateParam);
+      const endDate = new Date(endDateParam);
+      
+      // Get completed sales filtered by branch and date range
+      const sales = await db.sale.findMany({
+        where: {
+          status: SaleStatus.COMPLETED,
+          branchId,
+          endedAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        include: {
+          branch: { select: { id: true, name: true } },
+          staff: { select: { id: true, name: true } },
+          saleServices: {
+            select: {
+              id: true,
+              qty: true,
+              price: true,
+              service: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { endedAt: "desc" },
+      });
+
+      return NextResponse.json(sales);
+    }
+
+    // Otherwise, return all completed sales for the branch
+    const sales = await getCompletedSales();
+    const filteredSales = sales.filter((sale) => sale.branch?.id === branchId);
+    return NextResponse.json(filteredSales);
   } catch (error) {
     console.error(error);
     return NextResponse.json(

@@ -80,27 +80,27 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
       {/* Main row */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-4 px-6 py-4 cursor-pointer hover:bg-slate-50 transition"
+        className="flex items-center gap-2 md:gap-4 px-3 md:px-6 py-3 md:py-4 cursor-pointer hover:bg-slate-50 transition"
       >
         {/* Status indicator - green for completed */}
-        <div className="w-3 h-3 rounded-full flex-shrink-0 bg-green-500" />
+        <div className="w-2.5 md:w-3 h-2.5 md:h-3 rounded-full flex-shrink-0 bg-green-500" />
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3">
-            <span className="font-semibold text-slate-900">{displayName}</span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 border border-green-200 text-green-700">
-              <CheckCircle size={12} />
+          <div className="flex flex-wrap items-center gap-2 md:gap-3">
+            <span className="font-semibold text-sm md:text-base text-slate-900 truncate">{displayName}</span>
+            <span className="inline-flex items-center gap-1 px-1.5 md:px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium bg-green-50 border border-green-200 text-green-700">
+              <CheckCircle size={10} className="md:w-3 md:h-3" />
               Completed
             </span>
           </div>
-          <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
-            <span className="font-mono text-xs text-slate-400">#{sale.id.slice(0, 8)}</span>
-            <span>•</span>
+          <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1 text-xs md:text-sm text-slate-500">
+            <span className="font-mono text-[10px] md:text-xs text-slate-400">#{sale.id.slice(0, 8)}</span>
+            <span className="hidden md:inline">•</span>
             <span>{sale.saleServices.length} service{sale.saleServices.length !== 1 ? "s" : ""}</span>
             {sale.staff && (
               <>
-                <span>•</span>
+                <span className="hidden md:inline">•</span>
                 <span>{sale.staff.name}</span>
               </>
             )}
@@ -109,12 +109,16 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
 
         {/* Total and dates on the right */}
         <div className="text-right flex-shrink-0">
-          <div className="font-semibold text-slate-900">₱{sale.total.toFixed(2)}</div>
-          <div className="text-xs text-slate-500">
-            <span className="text-slate-400">Started:</span> {formatStartedDate(sale.createdAt)}
+          <div className="font-semibold text-sm md:text-base text-slate-900">₱{sale.total.toFixed(2)}</div>
+          <div className="text-[10px] md:text-xs text-slate-500">
+            <span className="text-slate-400 hidden md:inline">Started: </span>
+            <span className="md:hidden">S: </span>
+            {formatStartedDate(sale.createdAt)}
           </div>
-          <div className="text-xs text-slate-500">
-            <span className="text-slate-400">Completed:</span> {formatCompletedDate(sale.endedAt)}
+          <div className="text-[10px] md:text-xs text-slate-500">
+            <span className="text-slate-400 hidden md:inline">Completed: </span>
+            <span className="md:hidden">C: </span>
+            {formatCompletedDate(sale.endedAt)}
           </div>
         </div>
 

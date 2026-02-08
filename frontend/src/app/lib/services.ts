@@ -17,12 +17,40 @@ export async function getServices(branchId?: string) {
     where: {
       isActive: true,
       // Show services that belong to this branch OR are shared (no branchId)
-      ...(branchId ? { 
+      ...(branchId ? {
         OR: [
           { branchId },
-          { branchId: null }
-        ]
+          { branchId: null },
+        ],
       } : {}),
+    },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      durationMin: true,
+      price: true,
+      isActive: true,
+      branchId: true,
+      usesMaterials: true,
+      materials: {
+        include: {
+          material: {
+            select: { id: true, name: true, unit: true },
+          },
+        },
+      },
+    },
+  });
+}
+
+/** Branch-scoped list with full include (for Products page and GET /api/services). */
+export async function getServicesForBranch(branchId: string) {
+  return db.service.findMany({
+    where: {
+      isActive: true,
+      OR: [{ branchId }, { branchId: null }],
     },
     orderBy: { name: "asc" },
     include: {
@@ -69,8 +97,10 @@ export async function updateService(
   });
 }
 
+/** Soft-delete: set isActive = false so the service is hidden from lists but preserved for sales history. */
 export async function deleteService(id: string) {
-  return db.service.delete({
+  return db.service.update({
     where: { id },
+    data: { isActive: false },
   });
 }

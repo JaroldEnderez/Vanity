@@ -82,39 +82,38 @@ export async function getServiceMaterials(serviceId: string) {
   });
 }
 
-// SET service materials (replace all)
+// SET service materials (replace all) - Optimized with transaction
 export async function setServiceMaterials(
   serviceId: string,
   materials: Array<{ materialId: string; quantity: number }>
 ) {
-  // Delete existing
-  await db.serviceMaterial.deleteMany({
-    where: { serviceId },
+  return db.$transaction(async (tx) => {
+    // Delete existing and create new in parallel with service update
+    await Promise.all([
+      tx.serviceMaterial.deleteMany({
+        where: { serviceId },
+      }),
+      materials.length > 0
+        ? tx.serviceMaterial.createMany({
+            data: materials.map((m) => ({
+              serviceId,
+              materialId: m.materialId,
+              quantity: m.quantity,
+            })),
+          })
+        : Promise.resolve(),
+      tx.service.update({
+        where: { id: serviceId },
+        data: { usesMaterials: materials.length > 0 },
+      }),
+    ]);
+
+    // Return updated materials
+    return tx.serviceMaterial.findMany({
+      where: { serviceId },
+      include: { material: true },
+    });
   });
-
-  // Create new
-  if (materials.length > 0) {
-    await db.serviceMaterial.createMany({
-      data: materials.map((m) => ({
-        serviceId,
-        materialId: m.materialId,
-        quantity: m.quantity,
-      })),
-    });
-
-    // Update service flag
-    await db.service.update({
-      where: { id: serviceId },
-      data: { usesMaterials: true },
-    });
-  } else {
-    await db.service.update({
-      where: { id: serviceId },
-      data: { usesMaterials: false },
-    });
-  }
-
-  return getServiceMaterials(serviceId);
 }
 
 // GET materials with low stock

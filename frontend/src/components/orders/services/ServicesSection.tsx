@@ -82,7 +82,7 @@ export default function ServicesSection({ services, staffId }: Props) {
 
   return (
     <div className="h-full">
-      <h2 className="mb-4 text-xl font-semibold">Services</h2>
+      <h2 className="mb-3 md:mb-4 text-lg md:text-xl font-semibold">Services</h2>
 
       <ServiceGrid
         services={services}

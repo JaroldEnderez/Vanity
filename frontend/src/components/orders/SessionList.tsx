@@ -78,18 +78,19 @@ export default function SessionList({ staffId }: Props) {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 md:px-6 py-3 md:py-4 border-b">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Sessions</h1>
-          <p className="text-sm text-slate-500">Manage active and draft sessions</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900">Sessions</h1>
+          <p className="text-xs md:text-sm text-slate-500">Manage active and draft sessions</p>
         </div>
         <button
           onClick={handleCreate}
           disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 text-sm md:text-base w-full sm:w-auto"
         >
-          {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-          New Session
+          {isLoading ? <Loader2 size={16} className="md:w-[18px] md:h-[18px] animate-spin" /> : <Plus size={16} className="md:w-[18px] md:h-[18px]" />}
+          <span className="hidden sm:inline">New Session</span>
+          <span className="sm:hidden">New</span>
         </button>
       </div>
 
@@ -123,34 +124,35 @@ export default function SessionList({ staffId }: Props) {
                 <div
                   key={draft.id}
                   onClick={() => setActiveDraft(draft.id)}
-                  className="flex items-center gap-4 px-6 py-4 cursor-pointer hover:bg-slate-50 transition group"
+                  className="flex items-center gap-2 md:gap-4 px-3 md:px-6 py-3 md:py-4 cursor-pointer hover:bg-slate-50 transition group"
                 >
                   {/* Status indicator */}
-                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${status.color}`} />
+                  <div className={`w-2.5 md:w-3 h-2.5 md:h-3 rounded-full flex-shrink-0 ${status.color}`} />
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3">
-                      <span className="font-semibold text-slate-900">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                      <span className="font-semibold text-sm md:text-base text-slate-900 truncate">
                         {draft.name || `Session #${index + 1}`}
                       </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.bgColor} ${status.textColor}`}>
-                        <Icon size={12} />
+                      <span className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${status.bgColor} ${status.textColor}`}>
+                        <Icon size={10} className="md:w-3 md:h-3" />
                         {status.label}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
-                      <span className="font-mono text-xs text-slate-400">#{draft.id.slice(0, 8)}</span>
-                      <span>•</span>
+                    <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1 text-xs md:text-sm text-slate-500">
+                      <span className="font-mono text-[10px] md:text-xs text-slate-400">#{draft.id.slice(0, 8)}</span>
+                      <span className="hidden md:inline">•</span>
                       <span>{draft.items.length} service{draft.items.length !== 1 ? "s" : ""}</span>
-                      <span>•</span>
-                      <span>{formatDate(draft.createdAt)} at {formatTime(draft.createdAt)}</span>
+                      <span className="hidden md:inline">•</span>
+                      <span className="hidden md:inline">{formatDate(draft.createdAt)} at {formatTime(draft.createdAt)}</span>
+                      <span className="md:hidden">{formatDate(draft.createdAt)}</span>
                     </div>
                   </div>
 
                   {/* Total */}
                   <div className="text-right flex-shrink-0">
-                    <div className="font-semibold text-slate-900">₱{draft.total.toFixed(2)}</div>
+                    <div className="font-semibold text-sm md:text-base text-slate-900">₱{draft.total.toFixed(2)}</div>
                   </div>
 
                   {/* Actions */}

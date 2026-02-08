@@ -59,26 +59,26 @@ export default function Drawer({
           <div className="h-full flex flex-col">
             {/* Header */}
             {showHeader && (
-              <div className="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
+              <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-slate-50">
                 {headerContent ? (
-                  <div className="flex-1">{headerContent}</div>
+                  <div className="flex-1 min-w-0">{headerContent}</div>
                 ) : (
                   <div>
                     {title && (
-                      <h2 className="text-lg font-semibold text-slate-900">
+                      <h2 className="text-base md:text-lg font-semibold text-slate-900">
                         {title}
                       </h2>
                     )}
                     {subtitle && (
-                      <p className="text-sm text-slate-500">{subtitle}</p>
+                      <p className="text-xs md:text-sm text-slate-500">{subtitle}</p>
                     )}
                   </div>
                 )}
                 <button
                   onClick={onClose}
-                  className="p-2 hover:bg-slate-200 rounded-full transition ml-4"
+                  className="p-1.5 md:p-2 hover:bg-slate-200 rounded-full transition ml-2 md:ml-4 flex-shrink-0"
                 >
-                  <X size={20} className="text-slate-600" />
+                  <X size={18} className="md:w-5 md:h-5 text-slate-600" />
                 </button>
               </div>
             )}

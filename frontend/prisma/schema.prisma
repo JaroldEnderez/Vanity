@@ -42,6 +42,8 @@ model Staff {
   createdAt DateTime @default(now())
   sales     Sale[]
   branch    Branch?  @relation(fields: [branchId], references: [id])
+
+  @@index([branchId]) // Optimize staff queries by branch
 }
 
 model Service {
@@ -58,6 +60,8 @@ model Service {
   saleServices  SaleService[]
   Branch        Branch?           @relation(fields: [branchId], references: [id])
   materials     ServiceMaterial[]
+
+  @@index([isActive, branchId]) // Optimize service queries
 }
 
 model Material {
@@ -78,6 +82,8 @@ model ServiceMaterial {
   quantity   Float
   material   Material @relation(fields: [materialId], references: [id])
   service    Service  @relation(fields: [serviceId], references: [id])
+
+  @@index([serviceId]) // Optimize service material lookups
 }
 
 model AddOn {
@@ -117,6 +123,10 @@ model Sale {
   branch     Branch    @relation(fields: [branchId], references: [id])
   staff      Staff     @relation(fields: [staffId], references: [id])
   customer   Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([status, branchId]) // Optimize getDraftSessions queries
+  @@index([endedAt]) // Optimize date range queries for sales history
+  @@index([createdAt]) // Optimize sorting
 }
 
 model SaleAddOn {
@@ -139,6 +149,8 @@ model SaleService {
   service   Service  @relation(fields: [serviceId], references: [id])
 
   createdAt DateTime @default(now())
+
+  @@index([saleId]) // Optimize queries for session items
 }
 
 model SaleMaterial {
@@ -148,6 +160,8 @@ model SaleMaterial {
   quantity   Float
   material   Material @relation(fields: [materialId], references: [id])
   sale       Sale     @relation(fields: [saleId], references: [id])
+
+  @@index([saleId, materialId]) // Optimize material lookups per sale
 }
 
 model Customer {

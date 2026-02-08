@@ -63,7 +63,7 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
                 if (e.key === "Enter") handleSave();
                 if (e.key === "Escape") handleCancel();
               }}
-              className="text-lg font-semibold bg-white border border-slate-300 rounded px-2 py-0.5 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-base md:text-lg font-semibold bg-white border border-slate-300 rounded px-2 py-0.5 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
             <button
@@ -81,22 +81,22 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
           </>
         ) : (
           <>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className="text-base md:text-lg font-semibold text-slate-900 truncate">
               {draft.name || defaultName}
             </h2>
             <button
               onClick={() => setIsEditing(true)}
-              className="p-1 hover:bg-slate-200 rounded transition"
+              className="p-1 hover:bg-slate-200 rounded transition flex-shrink-0"
             >
-              <Pencil size={14} className="text-slate-500" />
+              <Pencil size={12} className="md:w-3.5 md:h-3.5 text-slate-500" />
             </button>
           </>
         )}
       </div>
 
       {/* ID, Service count and subtotal */}
-      <p className="text-sm text-slate-500">
-        <span className="font-mono text-slate-400">#{draft.id.slice(0, 8)}</span>
+      <p className="text-xs md:text-sm text-slate-500">
+        <span className="font-mono text-[10px] md:text-xs text-slate-400">#{draft.id.slice(0, 8)}</span>
         {" • "}
         {serviceCount} {serviceLabel} • ₱{draft.total.toFixed(2)}
       </p>
@@ -137,9 +137,9 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col md:flex-row">
       {/* Session List - Main Content */}
-      <div className="flex-1 bg-white">
+      <div className="flex-1 bg-white min-w-0">
         <SessionList staffId={defaultStaffId} />
       </div>
 
@@ -150,14 +150,14 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
         headerContent={<DrawerHeader draft={activeDraft} />}
         width="4xl"
       >
-        <div className="h-full flex">
+        <div className="h-full flex flex-col lg:flex-row">
           {/* Services Grid */}
-          <div className="flex-1 p-6 overflow-y-auto border-r">
+          <div className="flex-1 p-4 md:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r">
             <ServicesSection services={services} staffId={defaultStaffId} />
           </div>
 
           {/* Session Panel */}
-          <div className="w-80 px-4 py-4 bg-slate-50 flex flex-col">
+          <div className="w-full lg:w-80 px-4 py-4 bg-slate-50 flex flex-col border-t lg:border-t-0">
             <SalePanel />
           </div>
         </div>

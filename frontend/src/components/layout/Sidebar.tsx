@@ -34,7 +34,11 @@ const salesHistoryItems = [
   { label: "Monthly Sales", href: "/dashboard/sales/monthly", icon: CalendarRange },
 ]
 
-export default function Sidebar() {
+type Props = {
+  onClose?: () => void;
+};
+
+export default function Sidebar({ onClose }: Props) {
   const [isSalesHistoryOpen, setIsSalesHistoryOpen] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -46,39 +50,47 @@ export default function Sidebar() {
     signOut({ callbackUrl: "/login" });
   };
 
+  const handleLinkClick = () => {
+    // Close sidebar on mobile/tablet when link is clicked
+    if (onClose) {
+      onClose();
+    }
+  };
+
   return (
-    <aside className="w-64 bg-white border-r flex flex-col">
+    <aside className="w-56 md:w-64 bg-white border-r flex flex-col h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 font-bold text-xl text-black">
+      <div className="h-14 md:h-16 flex items-center px-4 md:px-6 font-bold text-lg md:text-xl text-black">
         Vanity POS
       </div>
 
       {/* Branch Info */}
       {session?.user?.branchName && (
-        <div className="mx-3 mb-4 px-4 py-3 bg-emerald-50 rounded-lg border border-emerald-200">
+        <div className="mx-2 md:mx-3 mb-3 md:mb-4 px-3 md:px-4 py-2 md:py-3 bg-emerald-50 rounded-lg border border-emerald-200">
           <div className="flex items-center gap-2 text-emerald-700">
-            <Building2 size={16} />
-            <span className="text-sm font-medium truncate">{session.user.branchName}</span>
+            <Building2 size={14} className="md:w-4 md:h-4" />
+            <span className="text-xs md:text-sm font-medium truncate">{session.user.branchName}</span>
           </div>
         </div>
       )}
 
       {/* Nav */}
-      <nav className="flex-1 px-3 space-y-1">
+      <nav className="flex-1 px-2 md:px-3 space-y-1 overflow-y-auto">
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
           return (
             <Link
               key={label}
               href={href}
-              className={`flex items-center gap-3 rounded-lg px-4 py-3 transition ${
+              onClick={handleLinkClick}
+              className={`flex items-center gap-3 rounded-lg px-3 md:px-4 py-2 md:py-3 transition ${
                 active 
                   ? "bg-gray-200 text-gray-900 font-medium" 
                   : "text-gray-700 hover:bg-gray-100"
               }`}
             >
-              <Icon size={20} />
-              <span>{label}</span>
+              <Icon size={18} className="md:w-5 md:h-5" />
+              <span className="text-sm md:text-base">{label}</span>
             </Link>
           );
         })}
@@ -87,15 +99,15 @@ export default function Sidebar() {
         <div>
           <button
             onClick={() => setIsSalesHistoryOpen(!isSalesHistoryOpen)}
-            className={`w-full flex items-center justify-between gap-3 rounded-lg px-4 py-3 transition ${
+            className={`w-full flex items-center justify-between gap-3 rounded-lg px-3 md:px-4 py-2 md:py-3 transition ${
               isSalesHistoryActive 
                 ? "bg-gray-200 text-gray-900 font-medium" 
                 : "text-gray-700 hover:bg-gray-100"
             }`}
           >
             <div className="flex items-center gap-3">
-              <History size={20} />
-              <span>Sales History</span>
+              <History size={18} className="md:w-5 md:h-5" />
+              <span className="text-sm md:text-base">Sales History</span>
             </div>
             {isSalesHistoryOpen ? (
               <ChevronDown size={16} />
@@ -113,13 +125,14 @@ export default function Sidebar() {
                   <Link
                     key={label}
                     href={href}
-                    className={`flex items-center gap-3 rounded-lg px-4 py-2 text-sm transition ${
+                    onClick={handleLinkClick}
+                    className={`flex items-center gap-3 rounded-lg px-3 md:px-4 py-2 text-sm transition ${
                       active 
                         ? "bg-gray-200 text-gray-900 font-medium" 
                         : "text-gray-600 hover:bg-gray-100"
                     }`}
                   >
-                    <Icon size={16} />
+                    <Icon size={14} className="md:w-4 md:h-4" />
                     <span>{label}</span>
                   </Link>
                 );
@@ -133,9 +146,9 @@ export default function Sidebar() {
       <div className="p-3 border-t">
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 rounded-lg px-4 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition"
+          className="w-full flex items-center gap-2 md:gap-3 rounded-lg px-3 md:px-4 py-2 md:py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition text-sm md:text-base"
         >
-          <LogOut size={20} />
+          <LogOut size={18} className="md:w-5 md:h-5" />
           <span>Sign out</span>
         </button>
         <div className="mt-2 px-4 text-xs text-gray-400">
