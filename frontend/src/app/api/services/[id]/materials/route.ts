@@ -10,10 +10,6 @@ function canAccessService(service: { branchId: string | null }, branchId: string
   return service.branchId === null || service.branchId === branchId;
 }
 
-function canModifyService(service: { branchId: string | null }, branchId: string) {
-  return service.branchId === branchId;
-}
-
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -52,7 +48,8 @@ export async function PUT(
     const { id } = await params;
     const existing = await getServiceById(id);
 
-    if (!existing || !canModifyService(existing, branchId)) {
+    // Allow saving materials for any service this branch can access (own or shared)
+    if (!existing || !canAccessService(existing, branchId)) {
       return NextResponse.json(
         { error: "Service not found" },
         { status: 404 }
@@ -60,8 +57,13 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const materials = await setServiceMaterials(id, body.materials || []);
-    return NextResponse.json(materials);
+    const raw = Array.isArray(body.materials) ? body.materials : [];
+    const materials = raw.map((m: { materialId?: string; quantity?: unknown }) => ({
+      materialId: String(m.materialId ?? ""),
+      quantity: Number(m.quantity) || 0,
+    })).filter((m) => m.materialId);
+    const result = await setServiceMaterials(id, materials);
+    return NextResponse.json(result);
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to update service materials";

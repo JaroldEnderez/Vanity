@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useSaleStore, DraftSale, DraftStatus } from "@/src/app/store/saleStore";
+import { useToastStore } from "@/src/app/store/toastStore";
 import StartSaleButton from "./StartSaleButton";
 import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X, User } from "lucide-react";
 
@@ -132,13 +133,14 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         try {
             // Checkout the session (marks as COMPLETED, deducts inventory)
             const success = await checkoutDraft(activeDraft.id, cashAmount);
-            
+
             if (!success) {
                 throw new Error('Failed to checkout');
             }
 
             setShowPayConfirmation(false);
             setCashReceived("");
+            useToastStore.getState().show('Session completed');
         } catch (error) {
             console.error('Payment failed:', error);
             alert('Failed to process payment. Please try again.');

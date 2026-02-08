@@ -7,7 +7,7 @@ import SessionList from "./SessionList";
 import ServicesSection from "./services/ServicesSection";
 import SalePanel from "./sale/SalePanel";
 import Drawer from "@/src/components/ui/Drawer";
-import { Loader2, Pencil, Check, X } from "lucide-react";
+import { Loader2, Pencil, Check, X, AlertCircle } from "lucide-react";
 
 type Props = {
   services: Service[];
@@ -111,6 +111,12 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
   const draftSales = useSaleStore((state) => state.draftSales);
   const activeDraftId = useSaleStore((state) => state.activeDraftId);
   const setActiveDraft = useSaleStore((state) => state.setActiveDraft);
+  const pendingSessionCreation = useSaleStore((state) => state.pendingSessionCreation);
+  const cancelSessionCreation = useSaleStore((state) => state.cancelSessionCreation);
+  const confirmSessionCreation = useSaleStore((state) => state.confirmSessionCreation);
+  const isLoading = useSaleStore((state) => state.isLoading);
+
+  const [showCancelCreationConfirm, setShowCancelCreationConfirm] = useState(false);
 
   const activeDraft = activeDraftId
     ? draftSales.find((d) => d.id === activeDraftId) || null
@@ -121,8 +127,36 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
     loadDraftsFromDB();
   }, [loadDraftsFromDB]);
 
+  // Reset cancel-confirm state when drawer is closed or no longer in pending creation
+  useEffect(() => {
+    if (!pendingSessionCreation && !activeDraftId) {
+      setShowCancelCreationConfirm(false);
+    }
+  }, [pendingSessionCreation, activeDraftId]);
+
   const closeDrawer = () => {
-    setActiveDraft(null);
+    if (pendingSessionCreation) {
+      setShowCancelCreationConfirm(true);
+    } else {
+      setActiveDraft(null);
+    }
+  };
+
+  const handleConfirmCreate = async () => {
+    await confirmSessionCreation();
+  };
+
+  const handleCancelCreate = () => {
+    setShowCancelCreationConfirm(true);
+  };
+
+  const handleConfirmCancelCreation = () => {
+    cancelSessionCreation();
+    setShowCancelCreationConfirm(false);
+  };
+
+  const handleDismissCancelCreationConfirm = () => {
+    setShowCancelCreationConfirm(false);
   };
 
   if (!isInitialized) {
@@ -145,22 +179,75 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
 
       {/* Session Drawer */}
       <Drawer
-        isOpen={!!activeDraftId}
+        isOpen={!!activeDraftId || pendingSessionCreation}
         onClose={closeDrawer}
-        headerContent={<DrawerHeader draft={activeDraft} />}
+        headerContent={
+          showCancelCreationConfirm ? (
+            <h2 className="text-base md:text-lg font-semibold text-slate-900">Cancel session creation?</h2>
+          ) : pendingSessionCreation ? (
+            <h2 className="text-base md:text-lg font-semibold text-slate-900">New Session</h2>
+          ) : (
+            <DrawerHeader draft={activeDraft} />
+          )
+        }
         width="4xl"
       >
-        <div className="h-full flex flex-col lg:flex-row">
-          {/* Services Grid */}
-          <div className="flex-1 p-4 md:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r">
-            <ServicesSection services={services} staffId={defaultStaffId} />
+        {showCancelCreationConfirm ? (
+          <div className="p-6 flex flex-col items-center justify-center min-h-[200px] text-center">
+            <p className="text-slate-600 mb-6">The session has not been created yet. Discard and close?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleConfirmCancelCreation}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+              >
+                Yes, cancel
+              </button>
+              <button
+                onClick={handleDismissCancelCreationConfirm}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+              >
+                No, keep
+              </button>
+            </div>
           </div>
+        ) : pendingSessionCreation ? (
+          <div className="p-6 flex flex-col items-center justify-center min-h-[200px] text-center">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
+              <AlertCircle className="w-7 h-7 text-emerald-600" />
+            </div>
+            <p className="text-slate-700 font-medium mb-1">A new session is about to be created.</p>
+            <p className="text-slate-500 text-sm mb-6">Confirm to create the session and start adding services, or cancel to close.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleConfirmCreate}
+                disabled={isLoading}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {isLoading ? <Loader2 size={18} className="animate-spin" /> : null}
+                Confirm
+              </button>
+              <button
+                onClick={handleCancelCreate}
+                disabled={isLoading}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col lg:flex-row">
+            {/* Services Grid */}
+            <div className="flex-1 p-4 md:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r">
+              <ServicesSection services={services} staffId={defaultStaffId} />
+            </div>
 
-          {/* Session Panel */}
-          <div className="w-full lg:w-80 px-4 py-4 bg-slate-50 flex flex-col border-t lg:border-t-0">
-            <SalePanel />
+            {/* Session Panel */}
+            <div className="w-full lg:w-80 px-4 py-4 bg-slate-50 flex flex-col border-t lg:border-t-0">
+              <SalePanel />
+            </div>
           </div>
-        </div>
+        )}
       </Drawer>
     </div>
   );

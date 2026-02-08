@@ -47,6 +47,13 @@ type SaleStore = {
   isInitialized: boolean;
   isSaving: boolean;
 
+  // Pending session creation (confirm before creating)
+  pendingSessionCreation: boolean;
+  pendingCreationStaffId: string | null;
+  startSessionCreation: (staffId: string) => void;
+  confirmSessionCreation: () => Promise<void>;
+  cancelSessionCreation: () => void;
+
   // Computed getter for active drafth
   getActiveDraft: () => DraftSale | null;
 
@@ -213,6 +220,28 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
   isLoading: false,
   isInitialized: false,
   isSaving: false,
+  pendingSessionCreation: false,
+  pendingCreationStaffId: null,
+
+  startSessionCreation: (staffId: string) => {
+    set({ pendingSessionCreation: true, pendingCreationStaffId: staffId });
+  },
+
+  confirmSessionCreation: async () => {
+    const { pendingCreationStaffId, createDraft } = get();
+    if (!pendingCreationStaffId) return;
+    set({ isLoading: true });
+    try {
+      await createDraft(pendingCreationStaffId);
+      set({ pendingSessionCreation: false, pendingCreationStaffId: null });
+    } finally {
+      set({ isLoading: false, pendingSessionCreation: false, pendingCreationStaffId: null });
+    }
+  },
+
+  cancelSessionCreation: () => {
+    set({ pendingSessionCreation: false, pendingCreationStaffId: null });
+  },
 
   getActiveDraft: () => {
     const state = get();

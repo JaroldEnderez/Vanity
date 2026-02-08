@@ -1,7 +1,7 @@
 "use client";
 
 import { useSaleStore, DraftSale } from "@/src/app/store/saleStore";
-import { Plus, Loader2, Clock, CheckCircle, AlertTriangle, Trash2, ChevronRight } from "lucide-react";
+import { Plus, Clock, CheckCircle, AlertTriangle, Trash2, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 type Props = {
@@ -40,14 +40,14 @@ export default function SessionList({ staffId }: Props) {
   const draftSales = useSaleStore((state) => state.draftSales);
   const activeDraftId = useSaleStore((state) => state.activeDraftId);
   const isLoading = useSaleStore((state) => state.isLoading);
-  const createDraft = useSaleStore((state) => state.createDraft);
+  const startSessionCreation = useSaleStore((state) => state.startSessionCreation);
   const setActiveDraft = useSaleStore((state) => state.setActiveDraft);
   const removeDraft = useSaleStore((state) => state.removeDraft);
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const handleCreate = async () => {
-    await createDraft(staffId);
+  const handleCreate = () => {
+    startSessionCreation(staffId);
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -77,21 +77,22 @@ export default function SessionList({ staffId }: Props) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
+      {/* Header: show "New Session" button only when there are sessions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 md:px-6 py-3 md:py-4 border-b">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900">Sessions</h1>
           <p className="text-xs md:text-sm text-slate-500">Manage active and draft sessions</p>
         </div>
-        <button
-          onClick={handleCreate}
-          disabled={isLoading}
-          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 text-sm md:text-base w-full sm:w-auto"
-        >
-          {isLoading ? <Loader2 size={16} className="md:w-[18px] md:h-[18px] animate-spin" /> : <Plus size={16} className="md:w-[18px] md:h-[18px]" />}
-          <span className="hidden sm:inline">New Session</span>
-          <span className="sm:hidden">New</span>
-        </button>
+        {draftSales.length > 0 && (
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm md:text-base w-full sm:w-auto"
+          >
+            <Plus size={16} className="md:w-[18px] md:h-[18px]" />
+            <span className="hidden sm:inline">New Session</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        )}
       </div>
 
       {/* Session List */}
@@ -107,10 +108,9 @@ export default function SessionList({ staffId }: Props) {
             </p>
             <button
               onClick={handleCreate}
-              disabled={isLoading}
-              className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+              className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
             >
-              {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+              <Plus size={18} />
               Create First Session
             </button>
           </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sidebar } from "@/src/components/layout"
+import { Sidebar } from "@/src/components/layout";
+import Toaster from "@/src/components/ui/Toast";
 import { Menu, X } from "lucide-react";
 
 type Props = {
@@ -42,6 +43,8 @@ export default function DashboardLayout({ children }: Props) {
       <main className="flex-1 overflow-y-auto p-4 md:p-6 w-full md:w-auto">
         {children}
       </main>
+
+      <Toaster />
     </div>
   )
 }

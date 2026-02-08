@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
-import { getAllSales, createSale, getCompletedSales } from "@/src/app/lib/sales";
+import { createSale } from "@/src/app/lib/sales";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
 import { db } from "@/src/app/lib/db";
 import { SaleStatus } from "@prisma/client";
+
+const saleListInclude = {
+  branch: { select: { id: true, name: true } },
+  staff: { select: { id: true, name: true } },
+  saleServices: {
+    select: {
+      id: true,
+      qty: true,
+      price: true,
+      service: { select: { id: true, name: true } },
+    },
+  },
+};
 
 export async function GET(req: Request) {
   try {
@@ -15,43 +28,25 @@ export async function GET(req: Request) {
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
 
-    // If date range is provided, use getCompletedSales with filtering
-    if (startDateParam && endDateParam) {
-      const startDate = new Date(startDateParam);
-      const endDate = new Date(endDateParam);
-      
-      // Get completed sales filtered by branch and date range
-      const sales = await db.sale.findMany({
-        where: {
-          status: SaleStatus.COMPLETED,
-          branchId,
-          endedAt: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        include: {
-          branch: { select: { id: true, name: true } },
-          staff: { select: { id: true, name: true } },
-          saleServices: {
-            select: {
-              id: true,
-              qty: true,
-              price: true,
-              service: { select: { id: true, name: true } },
-            },
-          },
-        },
-        orderBy: { endedAt: "desc" },
-      });
+    const where: { status: SaleStatus; branchId: string; endedAt?: { gte: Date; lte: Date } } = {
+      status: SaleStatus.COMPLETED,
+      branchId,
+    };
 
-      return NextResponse.json(sales);
+    if (startDateParam && endDateParam) {
+      where.endedAt = {
+        gte: new Date(startDateParam),
+        lte: new Date(endDateParam),
+      };
     }
 
-    // Otherwise, return all completed sales for the branch
-    const sales = await getCompletedSales();
-    const filteredSales = sales.filter((sale) => sale.branch?.id === branchId);
-    return NextResponse.json(filteredSales);
+    const sales = await db.sale.findMany({
+      where,
+      include: saleListInclude,
+      orderBy: { endedAt: "desc" },
+    });
+
+    return NextResponse.json(sales);
   } catch (error) {
     console.error(error);
     return NextResponse.json(
