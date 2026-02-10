@@ -1,10 +1,15 @@
-import { auth } from "@/src/app/lib/auth";
+import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default auth((req) => {
-  const session = req.auth;
-  const isLoggedIn = !!session?.user;
-  const role = session?.user?.role as "owner" | "branch" | undefined;
+/** Use getToken (Edge-safe) instead of auth() so we never pull db/path into the Edge bundle. */
+export async function middleware(req: NextRequest) {
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET,
+  });
+  const isLoggedIn = !!token;
+  const role = token?.role as "owner" | "branch" | undefined;
   const isLoginPage = req.nextUrl.pathname === "/login";
   const isApiAuth = req.nextUrl.pathname.startsWith("/api/auth");
   const isOwnerPath = req.nextUrl.pathname.startsWith("/owner");
@@ -32,7 +37,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
