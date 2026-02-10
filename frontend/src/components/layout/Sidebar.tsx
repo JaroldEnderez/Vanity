@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react"
 import { 
   ShoppingCart, 
@@ -52,8 +53,15 @@ export default function Sidebar({ onClose }: Props) {
   return (
     <aside className="w-56 md:w-64 bg-white border-r flex flex-col h-full">
       {/* Logo */}
-      <div className="h-14 md:h-16 flex items-center px-4 md:px-6 font-bold text-lg md:text-xl text-black">
-        Vanity POS
+      <div className="h-14 md:h-16 flex items-center gap-2 md:gap-3 px-4 md:px-6 font-bold text-lg md:text-xl text-black">
+        <Image
+          src="/logo/logo.jpg"
+          alt="Vanity"
+          width={48}
+          height={48}
+          className="w-12 h-12 md:w-14 md:h-14 rounded-lg object-cover flex-shrink-0"
+        />
+        <span>Vanity POS</span>
       </div>
 
       {/* Branch Info */}

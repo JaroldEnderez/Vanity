@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Scissors, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,8 +48,14 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md mx-4 md:mx-8">
         {/* Logo and branding */}
         <div className="text-center mb-6 md:mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl shadow-lg shadow-emerald-500/30 mb-3 md:mb-4">
-            <Scissors className="w-7 h-7 md:w-8 md:h-8 text-white" />
+          <div className="inline-flex items-center justify-center mb-3 md:mb-4">
+            <Image
+              src="/logo/logo.jpg"
+              alt="Vanity"
+              width={96}
+              height={96}
+              className="w-20 h-20 md:w-24 md:h-24 rounded-2xl object-cover shadow-lg"
+            />
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Vanity POS</h1>
           <p className="text-slate-400 mt-1 text-sm md:text-base">Sign in to your account</p>
