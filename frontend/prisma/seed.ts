@@ -169,14 +169,14 @@ async function main(){
     console.log("Services seeded.")
     console.log("\n=== Summary ===")
     console.log(`Owner: owner@vanity.com (password: owner123)`)
-    console.log(`Branches: ${branches.map(b => b.name).join(", ")}`)
+    console.log(`Branches: ${branches.map((b: { name: string }) => b.name).join(", ")}`)
     console.log(`\nBranch Login Accounts (password: password123):`)
     accounts.forEach((acc, i) => {
         console.log(`  - ${branches[i].name}: ${acc.email}`)
     });
-    console.log(`\nStylists: ${stylists.map(s => `${s.name} (${s.role})`).join(", ")}`)
-    console.log(`Other Staff: ${otherStaff.map(s => `${s.name} (${s.role})`).join(", ")}`)
-    console.log(`Customers: ${customers.map(c => c.name).join(", ")}`)
+    console.log(`\nStylists: ${stylists.map((s: { name: string; role: string | null }) => `${s.name} (${s.role})`).join(", ")}`)
+    console.log(`Other Staff: ${otherStaff.map((s: { name: string; role: string | null }) => `${s.name} (${s.role})`).join(", ")}`)
+    console.log(`Customers: ${customers.map((c: { name: string }) => c.name).join(", ")}`)
 }
 
 main()
