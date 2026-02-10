@@ -76,6 +76,18 @@ async function main(){
     console.log(`Created ${branches.length} branches`);
 
     // ============================================
+    // OWNER ACCOUNT (separate from branches)
+    // ============================================
+    console.log("Seeding owner account...");
+    const ownerPassword = await bcrypt.hash("owner123", 10);
+    await db.ownerAccount.upsert({
+        where: { email: "owner@vanity.com" },
+        update: {},
+        create: { email: "owner@vanity.com", password: ownerPassword },
+    });
+    console.log("Owner account: owner@vanity.com (password: owner123)");
+
+    // ============================================
     // BRANCH ACCOUNTS (one login per branch)
     // ============================================
     console.log("Seeding branch accounts...")
@@ -156,6 +168,7 @@ async function main(){
 
     console.log("Services seeded.")
     console.log("\n=== Summary ===")
+    console.log(`Owner: owner@vanity.com (password: owner123)`)
     console.log(`Branches: ${branches.map(b => b.name).join(", ")}`)
     console.log(`\nBranch Login Accounts (password: password123):`)
     accounts.forEach((acc, i) => {

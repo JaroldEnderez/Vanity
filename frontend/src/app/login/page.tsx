@@ -28,6 +28,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
+        // Redirect to dashboard; middleware will send owner to /owner
         router.push("/dashboard/orders");
         router.refresh();
       }
@@ -50,7 +51,7 @@ export default function LoginPage() {
             <Scissors className="w-7 h-7 md:w-8 md:h-8 text-white" />
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Vanity POS</h1>
-          <p className="text-slate-400 mt-1 text-sm md:text-base">Sign in to your branch account</p>
+          <p className="text-slate-400 mt-1 text-sm md:text-base">Sign in to your account</p>
         </div>
 
         {/* Login card */}

@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const branchId = await getAuthBranchId();
     
-    // Only return drafts for the logged-in branch
+    // Only return drafts (sessions API is for drafts only)
     const sessions = await getDraftSessions(branchId);
     return NextResponse.json(sessions);
   } catch (error) {
@@ -31,10 +31,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Ensure session always has a name (for owner dashboard and display)
+    let name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : null;
+    if (!name) {
+      const drafts = await getDraftSessions(branchId);
+      name = `Session #${drafts.length + 1}`;
+    }
+
     const session = await createSession({
-      branchId, // Use branchId from session
+      branchId,
       staffId: body.staffId,
-      name: body.name,
+      name,
       customerId: body.customerId,
     });
 
