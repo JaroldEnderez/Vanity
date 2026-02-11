@@ -171,7 +171,7 @@ async function main(){
     console.log(`Owner: owner@vanity.com (password: owner123)`)
     console.log(`Branches: ${branches.map((b: { name: string }) => b.name).join(", ")}`)
     console.log(`\nBranch Login Accounts (password: password123):`)
-    accounts.forEach((acc, i) => {
+    accounts.forEach((acc: { email: string }, i: number) => {
         console.log(`  - ${branches[i].name}: ${acc.email}`)
     });
     console.log(`\nStylists: ${stylists.map((s: { name: string; role: string | null }) => `${s.name} (${s.role})`).join(", ")}`)
