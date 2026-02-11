@@ -94,11 +94,11 @@ export default function SalesChart({ data, interval, title }: Props) {
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
             }}
-            formatter={(value: number, name: string) => {
+            formatter={(value, name) => {
               if (name === "total") {
-                return [`₱${value.toFixed(2)}`, "Revenue"];
+                return [`₱${Number(value ?? 0).toFixed(2)}`, "Revenue"];
               }
-              return [value, "Sales Count"];
+              return [value ?? 0, "Sales Count"];
             }}
             labelFormatter={(label) => `Period: ${label}`}
           />

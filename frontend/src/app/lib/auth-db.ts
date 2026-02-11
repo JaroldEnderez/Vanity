@@ -11,10 +11,11 @@ export type AuthUser =
  */
 export async function verifyCredentials(email: string, password: string): Promise<AuthUser | null> {
   // OwnerAccount exists only after prisma generate; guard for old client
-  const ownerAccount = "ownerAccount" in db ? (db as { ownerAccount: { findUnique: (args: { where: { email: string } }) => Promise<{ id: string; email: string; password: string } | null> } }).ownerAccount : null;
+  const ownerAccount = "ownerAccount" in db ? (db as unknown as { ownerAccount: { findUnique: (args: { where: { email: string }; select: { id: true; email: true; password: true } }) => Promise<{ id: string; email: string; password: string } | null> } }).ownerAccount : null;
   if (ownerAccount) {
     const owner = await ownerAccount.findUnique({
       where: { email },
+      select: { id: true, email: true, password: true },
     });
     if (owner) {
       const ok = await bcrypt.compare(password, owner.password);

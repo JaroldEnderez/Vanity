@@ -61,7 +61,7 @@ export async function PUT(
     const materials = raw.map((m: { materialId?: string; quantity?: unknown }) => ({
       materialId: String(m.materialId ?? ""),
       quantity: Number(m.quantity) || 0,
-    })).filter((m) => m.materialId);
+    })).filter((m: { materialId: string; quantity: number }) => m.materialId);
     const result = await setServiceMaterials(id, materials);
     return NextResponse.json(result);
   } catch (error) {
