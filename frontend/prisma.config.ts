@@ -1,10 +1,21 @@
 import { defineConfig } from "prisma/config";
 
-// Use placeholder when DATABASE_URL is missing (e.g. during Vercel npm install).
-// At runtime the app uses process.env.DATABASE_URL in db.ts.
+// DATABASE_URL or Neon-style *_DB_URL / *_DATABASE_URL (e.g. VANITY_DB_URL when you can't rename in Vercel)
+function getDatabaseUrl(): string {
+  const u = process.env.DATABASE_URL;
+  if (u) return u;
+  const key = Object.keys(process.env).find(
+    (k) =>
+      k.endsWith("_DATABASE_URL") ||
+      k.endsWith("_DB_URL") ||
+      k.endsWith("_db_url")
+  );
+  return (key ? process.env[key] : undefined) ?? "postgresql://localhost:5432/placeholder";
+}
+
 export default defineConfig({
   datasource: {
-    url: process.env.DATABASE_URL ?? "postgresql://localhost:5432/placeholder",
+    url: getDatabaseUrl(),
   },
   migrations: {
     seed: "tsx prisma/seed.ts",
