@@ -4,36 +4,32 @@ import type { NextRequest } from "next/server";
 
 /** Use getToken (Edge-safe) instead of auth() so we never pull db/path into the Edge bundle. */
 export async function middleware(req: NextRequest) {
+  // 1. Manually specify the secret and the secureCookie flag
   const token = await getToken({
     req,
     secret: process.env.AUTH_SECRET,
+    // This ensures it looks for the __Secure- prefix in production
+    secureCookie: process.env.NODE_ENV === "production",
   });
+
   const isLoggedIn = !!token;
   const role = token?.role as "owner" | "branch" | undefined;
-  const isLoginPage = req.nextUrl.pathname === "/login";
-  const isApiAuth = req.nextUrl.pathname.startsWith("/api/auth");
-  const isOwnerPath = req.nextUrl.pathname.startsWith("/owner");
-  const isDashboardPath = req.nextUrl.pathname.startsWith("/dashboard");
+  
+  const { pathname } = req.nextUrl;
 
-  if (isApiAuth) {
+  // 2. Allow API auth requests
+  if (pathname.startsWith("/api/auth")) {
     return NextResponse.next();
   }
 
-  if (!isLoggedIn && !isLoginPage) {
+  // 3. Redirect Logic
+  if (!isLoggedIn && pathname !== "/login") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  if (isLoggedIn && isLoginPage) {
-    if (role === "owner") return NextResponse.redirect(new URL("/owner", req.url));
-    return NextResponse.redirect(new URL("/dashboard/orders", req.url));
-  }
-
-  if (isOwnerPath && role !== "owner") {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  if (isDashboardPath && role === "owner") {
-    return NextResponse.redirect(new URL("/owner", req.url));
+  if (isLoggedIn && pathname === "/login") {
+    const redirectUrl = role === "owner" ? "/owner" : "/dashboard/orders";
+    return NextResponse.redirect(new URL(redirectUrl, req.url));
   }
 
   return NextResponse.next();
