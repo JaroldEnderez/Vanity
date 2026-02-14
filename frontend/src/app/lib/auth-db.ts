@@ -10,36 +10,37 @@ export type AuthUser =
  * This file should only be imported in server-side code, NOT in middleware.
  */
 export async function verifyCredentials(email: string, password: string): Promise<AuthUser | null> {
-  // OwnerAccount exists only after prisma generate; guard for old client
-  const ownerAccount = "ownerAccount" in db ? (db as unknown as { ownerAccount: { findUnique: (args: { where: { email: string }; select: { id: true; email: true; password: true } }) => Promise<{ id: string; email: string; password: string } | null> } }).ownerAccount : null;
-  if (ownerAccount) {
-    const owner = await ownerAccount.findUnique({
-      where: { email },
-      select: { id: true, email: true, password: true },
-    });
-    if (owner) {
-      const ok = await bcrypt.compare(password, owner.password);
-      if (ok) {
-        return { id: owner.id, email: owner.email, role: "owner" };
-      }
-      return null;
+  const normalizedEmail = email.trim().toLowerCase();
+  
+  // 1. Check Owner Table
+  const owner = await db.ownerAccount.findUnique({
+    where: { email: normalizedEmail }
+  });
+
+  if (owner) {
+    const isMatch = await bcrypt.compare(password, owner.password);
+    if (isMatch) return { id: owner.id, email: owner.email, role: "owner" };
+    return null; 
+  }
+
+  // 2. Check Branch Table
+  const branchAcc = await db.branchAccount.findUnique({
+    where: { email: normalizedEmail },
+    include: { branch: true }
+  });
+
+  if (branchAcc) {
+    const isMatch = await bcrypt.compare(password, branchAcc.password);
+    if (isMatch) {
+      return {
+        id: branchAcc.id,
+        email: branchAcc.email,
+        role: "branch",
+        branchId: branchAcc.branchId,
+        branchName: branchAcc.branch.name
+      };
     }
   }
 
-  const branchAccount = await db.branchAccount.findUnique({
-    where: { email },
-    include: { branch: true },
-  });
-  if (!branchAccount) return null;
-
-  const ok = await bcrypt.compare(password, branchAccount.password);
-  if (!ok) return null;
-
-  return {
-    id: branchAccount.id,
-    email: branchAccount.email,
-    role: "branch",
-    branchId: branchAccount.branchId,
-    branchName: branchAccount.branch.name,
-  };
+  return null;
 }

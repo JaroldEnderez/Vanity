@@ -1,13 +1,25 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import path from "path";
 
-const dbPath = path.resolve(process.cwd(), "prisma", "vanity.db");
-const connectionString = `file:${dbPath}`;
+const url = process.env.DATABASE_URL ?? "";
+const isPostgres = url.startsWith("postgresql://") || url.startsWith("postgres://");
 
-// Set DATABASE_URL - required for Prisma 7 adapter
-process.env.DATABASE_URL = connectionString;
+function defaultSqliteUrl(): string {
+  const cwd = process.cwd();
+  const inFrontend = cwd.endsWith("frontend") || path.basename(cwd) === "frontend";
+  const dbPath = inFrontend
+    ? path.resolve(cwd, "prisma", "vanity.db")
+    : path.resolve(cwd, "frontend", "prisma", "vanity.db");
+  return `file:${dbPath}`;
+}
 
-const adapter = new PrismaBetterSqlite3({ url: connectionString });
+const connectionString = isPostgres ? url : (url.startsWith("file:") ? url : defaultSqliteUrl());
 
-export const db = new PrismaClient({ adapter });
+if (!process.env.DATABASE_URL) process.env.DATABASE_URL = connectionString;
+
+// Prisma 7 requires adapter or accelerateUrl. Postgres: PrismaPg; SQLite: PrismaBetterSqlite3.
+export const db = isPostgres
+  ? new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
+  : new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: connectionString }) });
