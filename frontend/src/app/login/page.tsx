@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Loader2, Eye, EyeOff } from "lucide-react";
@@ -29,8 +29,10 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
-        // Redirect to dashboard; middleware will send owner to /owner
-        router.push("/dashboard/orders");
+        const session = await getSession();
+        const role = session?.user?.role;
+        const target = role === "owner" ? "/owner" : "/dashboard/orders";
+        router.push(target);
         router.refresh();
       }
     } catch {

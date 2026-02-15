@@ -32,6 +32,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(redirectUrl, req.url));
   }
 
+  // Owner must not use branch dashboard (branchId/branchName are undefined for owner)
+  if (pathname.startsWith("/dashboard") && role === "owner") {
+    return NextResponse.redirect(new URL("/owner", req.url));
+  }
+  if (pathname.startsWith("/owner") && role !== "owner") {
+    return NextResponse.redirect(new URL("/dashboard/orders", req.url));
+  }
+
   return NextResponse.next();
 }
 
