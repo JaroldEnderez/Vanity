@@ -1,4 +1,8 @@
-import { db } from "./db";
+import { db, interactiveTxOptions } from "./db";
+import {
+  deductMaterialsForSaleCompletion,
+  resolveMaterialsFromServiceRecipes,
+} from "./inventory";
 import { SaleStatus } from "@prisma/client";
 
 // GET all sales
@@ -185,49 +189,74 @@ export async function updateSale(
 
 // CHECKOUT sale (finalize and make immutable)
 export async function checkoutSale(id: string) {
-  const sale = await db.sale.findUnique({
-    where: { id },
-    include: {
-      saleServices: true,
-      saleAddOns: true,
-    },
-  });
+  return db.$transaction(async (tx) => {
+    const sale = await tx.sale.findUnique({
+      where: { id },
+      include: {
+        saleServices: true,
+        saleAddOns: true,
+        saleMaterials: true,
+      },
+    });
 
-  if (!sale) {
-    throw new Error("Sale not found");
-  }
+    if (!sale) {
+      throw new Error("Sale not found");
+    }
 
-  if (sale.status !== SaleStatus.DRAFT) {
-    throw new Error("Sale is already completed or cancelled");
-  }
+    if (sale.status !== SaleStatus.DRAFT) {
+      throw new Error("Sale is already completed or cancelled");
+    }
 
-  // Recalculate totals from persisted data (reproducible!)
-  const basePrice = sale.saleServices.reduce(
-    (sum, ss) => sum + ss.price * ss.qty,
-    0
-  );
-  const addOnsTotal = sale.saleAddOns.reduce((sum, sa) => sum + sa.price, 0);
-  const total = basePrice + addOnsTotal;
+    // Recalculate totals from persisted data (reproducible!)
+    const basePrice = sale.saleServices.reduce(
+      (sum, ss) => sum + ss.price * ss.qty,
+      0
+    );
+    const addOnsTotal = sale.saleAddOns.reduce((sum, sa) => sum + sa.price, 0);
+    const total = basePrice + addOnsTotal;
 
-  return db.sale.update({
-    where: { id },
-    data: {
-      status: SaleStatus.COMPLETED,
-      endedAt: new Date(),
-      basePrice,
-      addOns: addOnsTotal,
-      total,
-    },
-    include: {
-      branch: true,
-      staff: true,
-      customer: true,
-      saleServices: { include: { service: true } },
-      saleAddOns: { include: { addOn: true } },
-      saleMaterials: { include: { material: true } },
-      payments: true,
-    },
-  });
+    let materialsToDeduct = sale.saleMaterials.map((m) => ({
+      materialId: m.materialId,
+      quantity: m.quantity,
+    }));
+    if (materialsToDeduct.length === 0 && sale.saleServices.length > 0) {
+      materialsToDeduct = await resolveMaterialsFromServiceRecipes(
+        tx,
+        sale.saleServices.map((ss) => ({ serviceId: ss.serviceId, qty: ss.qty }))
+      );
+      if (materialsToDeduct.length > 0) {
+        await tx.saleMaterial.createMany({
+          data: materialsToDeduct.map((m) => ({
+            saleId: sale.id,
+            materialId: m.materialId,
+            quantity: m.quantity,
+          })),
+        });
+      }
+    }
+
+    await deductMaterialsForSaleCompletion(tx, sale.id, materialsToDeduct);
+
+    return tx.sale.update({
+      where: { id },
+      data: {
+        status: SaleStatus.COMPLETED,
+        endedAt: new Date(),
+        basePrice,
+        addOns: addOnsTotal,
+        total,
+      },
+      include: {
+        branch: true,
+        staff: true,
+        customer: true,
+        saleServices: { include: { service: true } },
+        saleAddOns: { include: { addOn: true } },
+        saleMaterials: { include: { material: true } },
+        payments: true,
+      },
+    });
+  }, interactiveTxOptions);
 }
 
 // CANCEL sale
@@ -293,6 +322,9 @@ export async function getCompletedSales(options?: {
           id: true,
           qty: true,
           price: true,
+          serviceDisplayName: true,
+          colorUsed: true,
+          developer: true,
           service: {
             select: { id: true, name: true },
           },

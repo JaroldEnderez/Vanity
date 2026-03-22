@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDraftSessions, createSession } from "@/src/app/lib/sessions";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { ensureWalkInCustomer } from "@/src/app/lib/ensureWalkInCustomer";
+import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
 
 // GET /sessions → get all draft sessions for current branch
 export async function GET() {
@@ -38,11 +40,18 @@ export async function POST(req: Request) {
       name = `Session #${drafts.length + 1}`;
     }
 
+    await ensureWalkInCustomer();
+    const rawCustomerId =
+      typeof body.customerId === "string" && body.customerId.trim()
+        ? body.customerId.trim()
+        : null;
+    const customerId = rawCustomerId ?? WALK_IN_CUSTOMER_ID;
+
     const session = await createSession({
       branchId,
       staffId: body.staffId,
       name,
-      customerId: body.customerId,
+      customerId,
     });
 
     return NextResponse.json(session, { status: 201 });

@@ -17,9 +17,21 @@ type ServiceMaterial = {
   material: Material;
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  Haircut: "Haircut",
+  Hair_Coloring: "Hair Coloring",
+  Treatment: "Treatment",
+  Rebond: "Rebond",
+  Perm: "Perm",
+  Styling: "Styling",
+  Nails: "Nails",
+  Others: "Others",
+};
+
 type Service = {
   id: string;
   name: string;
+  category?: string;
   description: string | null;
   durationMin: number | null;
   price: number;
@@ -55,6 +67,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
   const [formData, setFormData] = useState<ServiceForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [addServiceError, setAddServiceError] = useState<string | null>(null);
 
   // Materials modal state
   const [materialsModalServiceId, setMaterialsModalServiceId] = useState<string | null>(null);
@@ -75,6 +88,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
     setIsAddingNew(true);
     setEditingId(null);
     setFormData(emptyForm);
+    setAddServiceError(null);
   };
 
   const handleEdit = (service: Service) => {
@@ -92,11 +106,13 @@ export default function ServicesManager({ initialServices, initialMaterials = []
     setIsAddingNew(false);
     setEditingId(null);
     setFormData(emptyForm);
+    setAddServiceError(null);
   };
 
   const handleSaveNew = async () => {
     if (!formData.name.trim()) return;
 
+    setAddServiceError(null);
     setIsLoading(true);
     try {
       const res = await fetch("/api/services", {
@@ -105,15 +121,25 @@ export default function ServicesManager({ initialServices, initialMaterials = []
         body: JSON.stringify(formData),
       });
 
-      if (!res.ok) throw new Error("Failed to create service");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = typeof data.error === "string" ? data.error : "Failed to create service";
+        setAddServiceError(
+          res.status === 409 || message.toLowerCase().includes("already exists")
+            ? "This service already exists."
+            : message
+        );
+        return;
+      }
 
-      const newService = await res.json();
+      const newService = data;
       setServices([...services, { ...newService, materials: [] }]);
       setIsAddingNew(false);
       setFormData(emptyForm);
+      setAddServiceError(null);
     } catch (error) {
       console.error(error);
-      alert("Failed to create service");
+      setAddServiceError(error instanceof Error ? error.message : "Failed to create service");
     } finally {
       setIsLoading(false);
     }
@@ -268,6 +294,19 @@ export default function ServicesManager({ initialServices, initialMaterials = []
     return service.materials?.length || 0;
   };
 
+  // Group services by category for display (order: Haircut, Hair Coloring, Treatment, Rebond, Perm, Styling, Nails, Others)
+  const categoryOrder = ["Haircut", "Hair_Coloring", "Treatment", "Rebond", "Perm", "Styling", "Nails", "Others"];
+  const groupedByCategory = categoryOrder.reduce<Array<{ category: string; label: string; services: Service[] }>>(
+    (acc, cat) => {
+      const list = services.filter((s) => (s.category || "Others") === cat);
+      if (list.length > 0) {
+        acc.push({ category: cat, label: CATEGORY_LABELS[cat] ?? cat, services: list });
+      }
+      return acc;
+    },
+    []
+  );
+
   return (
     <div className="space-y-4">
       {/* Add New Button */}
@@ -286,40 +325,34 @@ export default function ServicesManager({ initialServices, initialMaterials = []
         </button>
       </div>
 
-      {/* Services Table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">
-                Service Name
-              </th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">
-                Description
-              </th>
-              <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">
-                Duration
-              </th>
-              <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">
-                Price
-              </th>
-              <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">
-                Materials
-              </th>
-              <th className="text-center px-4 py-3 text-sm font-medium text-slate-600 w-32">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {/* Add New Row */}
-            {isAddingNew && (
+      <div className="space-y-6">
+      {/* Add New Service — separate card when adding */}
+      {isAddingNew && (
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-md">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h2 className="text-sm font-bold text-slate-900">Add new service</h2>
+          </div>
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Service Name</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Description</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Duration</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">Price</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Materials</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600 w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               <tr className="bg-emerald-50">
                 <td className="px-4 py-3">
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      if (addServiceError) setAddServiceError(null);
+                    }}
                     placeholder="Service name"
                     className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     autoFocus
@@ -356,9 +389,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                     />
                   </div>
                 </td>
-                <td className="px-4 py-3 text-center text-slate-400 text-sm">
-                  Save first
-                </td>
+                <td className="px-4 py-3 text-center text-slate-400 text-sm">Save first</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-2">
                     <button
@@ -378,10 +409,35 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                   </div>
                 </td>
               </tr>
-            )}
+            </tbody>
+          </table>
+          {addServiceError && (
+            <p className="px-4 py-3 text-sm text-red-600 bg-red-50 border-t border-red-100" role="alert">
+              {addServiceError}
+            </p>
+          )}
+        </div>
+      )}
 
-            {/* Existing Services */}
-            {services.map((service) => (
+      {/* One table per category, each in its own card with shadow */}
+      {groupedByCategory.map(({ category, label, services: categoryServices }) => (
+        <div key={category} className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-md">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h2 className="text-sm font-bold text-slate-900">{label}</h2>
+          </div>
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Service Name</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Description</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Duration</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">Price</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Materials</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600 w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {categoryServices.map((service) => (
               <tr key={service.id} className={editingId === service.id ? "bg-blue-50" : "hover:bg-slate-50"}>
                 {editingId === service.id ? (
                   // Edit Mode
@@ -457,7 +513,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                   // View Mode
                   <>
                     <td className="px-4 py-3">
-                      <span className="font-medium text-slate-900">{service.name}</span>
+                      <span className="font-normal text-slate-600">{service.name}</span>
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {service.description || <span className="text-slate-400 italic">No description</span>}
@@ -527,18 +583,20 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                   </>
                 )}
               </tr>
-            ))}
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
 
-            {/* Empty State */}
-            {services.length === 0 && !isAddingNew && (
-              <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
-                  No services yet. Click "Add Service" to create one.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      {/* Empty State — single card when no services */}
+      {services.length === 0 && !isAddingNew && (
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-md">
+          <div className="px-4 py-12 text-center text-slate-500">
+            No services yet. Click "Add Service" to create one.
+          </div>
+        </div>
+      )}
       </div>
 
 

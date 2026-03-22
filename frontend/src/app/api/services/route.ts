@@ -27,8 +27,16 @@ export async function POST(req: Request) {
       branchId, // New services belong to the current branch
     });
     return NextResponse.json(service, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(error);
+    // Prisma unique constraint (e.g. duplicate service name)
+    const prismaError = error as { code?: string };
+    if (prismaError.code === "P2002") {
+      return NextResponse.json(
+        { error: "A service with this name already exists. Please use a different name." },
+        { status: 409 }
+      );
+    }
     const message = error instanceof Error ? error.message : "Failed to create service";
     const status = message.includes("Unauthorized") ? 401 : 500;
     return NextResponse.json(

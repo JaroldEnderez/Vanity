@@ -21,9 +21,13 @@ export async function PATCH(
 
     const body = await req.json();
 
-    if (typeof body.quantity !== "number") {
+    if (
+      typeof body.quantity !== "number" ||
+      !Number.isFinite(body.quantity) ||
+      body.quantity <= 0
+    ) {
       return NextResponse.json(
-        { error: "quantity is required" },
+        { error: "quantity must be a positive finite number" },
         { status: 400 }
       );
     }

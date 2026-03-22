@@ -7,6 +7,9 @@ type SaleService = {
   id: string;
   qty: number;
   price: number;
+  serviceDisplayName?: string | null;
+  colorUsed?: string | null;
+  developer?: string | null;
   service: {
     id: string;
     name: string;
@@ -19,8 +22,14 @@ type Sale = {
   total: number;
   basePrice: number;
   addOns: number;
+  cashReceived?: number | null;
+  changeGiven?: number | null;
   createdAt: Date;
   endedAt: Date | null;
+  customer: {
+    id: string;
+    name: string;
+  } | null;
   staff: {
     id: string;
     name: string;
@@ -98,6 +107,12 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
             <span className="font-mono text-[10px] md:text-xs text-slate-400">#{sale.id.slice(0, 8)}</span>
             <span className="hidden md:inline">•</span>
             <span>{sale.saleServices.length} service{sale.saleServices.length !== 1 ? "s" : ""}</span>
+            {sale.customer && (
+              <>
+                <span className="hidden md:inline">•</span>
+                <span className="text-slate-600">{sale.customer.name}</span>
+              </>
+            )}
             {sale.staff && (
               <>
                 <span className="hidden md:inline">•</span>
@@ -134,9 +149,13 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-4">
+        <div className="bg-slate-200 border-t border-slate-300 px-6 py-4 space-y-4">
           {/* Meta Info */}
-          <div className="flex gap-6 text-sm">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <div>
+              <span className="text-slate-500">Customer:</span>{" "}
+              <span className="font-medium">{sale.customer?.name ?? "—"}</span>
+            </div>
             <div>
               <span className="text-slate-500">Staff:</span>{" "}
               <span className="font-medium">{sale.staff?.name || "—"}</span>
@@ -150,24 +169,54 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
           {/* Services List */}
           <div className="space-y-2">
             <div className="text-sm font-medium text-slate-700">Services</div>
-            {sale.saleServices.map((ss) => (
-              <div
-                key={ss.id}
-                className="flex justify-between items-center bg-white rounded px-3 py-2 text-sm"
-              >
-                <div>
-                  <span className="font-medium">{ss.service.name}</span>
-                  {ss.qty > 1 && (
-                    <span className="text-slate-500 ml-2">×{ss.qty}</span>
-                  )}
+            {sale.saleServices.map((ss) => {
+              const lineTitle = ss.serviceDisplayName?.trim() || ss.service.name;
+              const hasColoring =
+                Boolean(ss.colorUsed?.trim()) || Boolean(ss.developer?.trim());
+              return (
+                <div
+                  key={ss.id}
+                  className="flex justify-between items-start gap-3 rounded px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div>
+                      <span className="font-medium">{lineTitle}</span>
+                      {ss.qty > 1 && (
+                        <span className="text-slate-500 ml-2">×{ss.qty}</span>
+                      )}
+                    </div>
+                    {ss.serviceDisplayName?.trim() && ss.serviceDisplayName !== ss.service.name && (
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Service: {ss.service.name}
+                      </div>
+                    )}
+                    {hasColoring && (
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                        {ss.colorUsed?.trim() && (
+                          <span>
+                            <span className="text-slate-500">Hair color:</span>{" "}
+                            {ss.colorUsed.trim()}
+                          </span>
+                        )}
+                        {ss.developer?.trim() && (
+                          <span>
+                            <span className="text-slate-500">Developer:</span>{" "}
+                            {ss.developer.trim()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-shrink-0 font-medium tabular-nums">
+                    ₱{(ss.price * ss.qty).toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-slate-700">₱{(ss.price * ss.qty).toFixed(2)}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Totals */}
-          <div className="border-t border-slate-200 pt-3 space-y-1 text-sm">
+          <div className="border-t border-slate-300 pt-3 space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Subtotal</span>
               <span>₱{sale.basePrice.toFixed(2)}</span>
@@ -182,6 +231,24 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
               <span>Total</span>
               <span>₱{sale.total.toFixed(2)}</span>
             </div>
+            {(sale.cashReceived != null || sale.changeGiven != null) && (
+              <div className="pt-2 mt-2 border-t border-slate-300 space-y-1">
+                {sale.cashReceived != null && (
+                  <div className="flex justify-between text-slate-700">
+                    <span className="text-slate-500">Cash received</span>
+                    <span className="tabular-nums">₱{Number(sale.cashReceived).toFixed(2)}</span>
+                  </div>
+                )}
+                {sale.changeGiven != null && (
+                  <div className="flex justify-between text-slate-700">
+                    <span className="text-slate-500">Change given</span>
+                    <span className="tabular-nums font-medium text-emerald-800">
+                      ₱{Number(sale.changeGiven).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -173,8 +173,17 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
   return (
     <div className="h-full flex flex-col md:flex-row">
       {/* Session List - Main Content */}
-      <div className="flex-1 bg-white min-w-0">
-        <SessionList staffId={defaultStaffId} />
+      <div className="flex-1 bg-white min-w-0 flex flex-col min-h-0">
+        {!defaultStaffId?.trim() && (
+          <div className="px-4 md:px-6 py-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-sm">
+            <strong className="font-semibold">No staff on file for this branch.</strong> Sessions need a
+            default staff member. Add staff in the owner dashboard (or seed your database), then refresh
+            this page.
+          </div>
+        )}
+        <div className="flex-1 min-h-0">
+          <SessionList staffId={defaultStaffId} />
+        </div>
       </div>
 
       {/* Session Drawer */}

@@ -33,6 +33,11 @@ export async function POST(
       qty: body.qty || 1,
       price: body.price,
       materials: body.materials,
+      serviceDisplayName: body.serviceDisplayName,
+      colorUsed: body.colorUsed,
+      developer: body.developer,
+      itemStaffName: body.itemStaffName,
+      remarks: body.remarks,
     });
 
     return NextResponse.json(session);

@@ -19,8 +19,18 @@ export async function POST(
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    const { cashReceived } = body;
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    let cashReceived: number | undefined;
+    if (body.cashReceived !== undefined && body.cashReceived !== null) {
+      const n = Number(body.cashReceived);
+      if (!Number.isFinite(n) || n < 0) {
+        return NextResponse.json(
+          { error: "cashReceived must be a non-negative number" },
+          { status: 400 }
+        );
+      }
+      cashReceived = n;
+    }
 
     const session = await checkoutSession(id, cashReceived);
     return NextResponse.json(session);

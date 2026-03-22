@@ -6,11 +6,15 @@ import ServiceCard from "./ServiceCard";
 type Props = {
   services: Service[];
   onSelectService: (service: Service) => void;
+  onHoverService?: (serviceId: string) => void;
+  selectedServiceId?: string | null;
 };
 
 export default function ServiceGrid({
   services,
   onSelectService,
+  onHoverService,
+  selectedServiceId = null,
 }: Props) {
   if (!services.length) {
     return (
@@ -27,6 +31,8 @@ export default function ServiceGrid({
           key={service.id}
           service={service}
           onSelect={onSelectService}
+          onHover={onHoverService ? () => onHoverService(service.id) : undefined}
+          isHighlighted={selectedServiceId === service.id}
         />
       ))}
     </div>

@@ -24,10 +24,11 @@ export async function getServices(branchId?: string) {
         ],
       } : {}),
     },
-    orderBy: { name: "asc" },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,
+      category: true,
       description: true,
       durationMin: true,
       price: true,
@@ -52,7 +53,7 @@ export async function getServicesForBranch(branchId: string) {
       isActive: true,
       OR: [{ branchId }, { branchId: null }],
     },
-    orderBy: { name: "asc" },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
     include: {
       materials: {
         include: { material: true },

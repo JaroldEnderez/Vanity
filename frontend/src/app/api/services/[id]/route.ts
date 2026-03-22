@@ -79,7 +79,8 @@ export async function DELETE(
     const { id } = await params;
     const existing = await getServiceById(id);
 
-    if (!existing || !canModifyService(existing, branchId)) {
+    // Allow soft-delete if the branch can access the service (own or shared)
+    if (!existing || !canAccessService(existing, branchId)) {
       return NextResponse.json(
         { error: "Service not found" },
         { status: 404 }

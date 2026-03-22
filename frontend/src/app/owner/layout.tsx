@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -16,6 +17,11 @@ export default function OwnerLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: "/login" });
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -51,7 +57,7 @@ export default function OwnerLayout({
             </div>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => setShowLogoutConfirm(true)}
               className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
             >
               <LogOut size={16} />
@@ -60,6 +66,33 @@ export default function OwnerLayout({
           </div>
         </div>
       </header>
+
+      {/* Logout confirmation modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl p-6 mx-4 max-w-sm w-full">
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">Sign out?</h3>
+            <p className="text-sm text-slate-600 mb-6">You will need to sign in again to access the owner dashboard.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>

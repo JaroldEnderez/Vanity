@@ -4,12 +4,14 @@ import {
   updateMaterial,
   deleteMaterial,
 } from "@/src/app/lib/materials";
+import { requireAuthenticatedUser } from "@/src/app/lib/auth-utils";
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireAuthenticatedUser();
     const { id } = await params;
     const material = await getMaterialById(id);
     if (!material) {
@@ -21,10 +23,9 @@ export async function GET(
     return NextResponse.json(material);
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "Failed to fetch material" },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Failed to fetch material";
+    const status = message.includes("Unauthorized") ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
@@ -33,16 +34,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireAuthenticatedUser();
     const { id } = await params;
     const body = await req.json();
     const material = await updateMaterial(id, body);
     return NextResponse.json(material);
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "Failed to update material" },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Failed to update material";
+    const status = message.includes("Unauthorized") ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
@@ -51,14 +52,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireAuthenticatedUser();
     const { id } = await params;
     await deleteMaterial(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "Failed to delete material" },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Failed to delete material";
+    const status = message.includes("Unauthorized") ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

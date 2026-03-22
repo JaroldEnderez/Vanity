@@ -1,6 +1,7 @@
 "use client";
 
 import { useSaleStore, DraftSale } from "@/src/app/store/saleStore";
+import { useToastStore } from "@/src/app/store/toastStore";
 import { Plus, Clock, CheckCircle, AlertTriangle, Trash2, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
@@ -47,6 +48,12 @@ export default function SessionList({ staffId }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleCreate = () => {
+    if (!staffId?.trim()) {
+      useToastStore.getState().show(
+        "Add at least one staff member for this branch before creating a session."
+      );
+      return;
+    }
     startSessionCreation(staffId);
   };
 
@@ -86,7 +93,9 @@ export default function SessionList({ staffId }: Props) {
         {draftSales.length > 0 && (
           <button
             onClick={handleCreate}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm md:text-base w-full sm:w-auto"
+            disabled={!staffId?.trim()}
+            title={!staffId?.trim() ? "Add staff for this branch first" : undefined}
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm md:text-base w-full sm:w-auto disabled:opacity-50 disabled:pointer-events-none"
           >
             <Plus size={16} className="md:w-[18px] md:h-[18px]" />
             <span className="hidden sm:inline">New Session</span>
@@ -108,7 +117,9 @@ export default function SessionList({ staffId }: Props) {
             </p>
             <button
               onClick={handleCreate}
-              className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+              disabled={!staffId?.trim()}
+              title={!staffId?.trim() ? "Add staff for this branch first" : undefined}
+              className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 disabled:pointer-events-none"
             >
               <Plus size={18} />
               Create First Session

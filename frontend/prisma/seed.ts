@@ -1,5 +1,8 @@
+import "./load-env";
 import { db } from "@/src/app/lib/db";
 import bcrypt from "bcryptjs";
+import { SaleStatus } from "@prisma/client";
+import { WALK_IN_CUSTOMER_ID, WALK_IN_CUSTOMER_NAME } from "@/src/app/lib/walkInCustomer";
 
 // Helper to create or find branch account
 async function upsertBranchAccount(email: string, password: string, branchId: string) {
@@ -130,9 +133,16 @@ async function main(){
     console.log(`Created ${otherStaff.length} other staff members`);
 
     // ============================================
-    // CUSTOMERS (5 customers)
+    // CUSTOMERS (system Walk-in + sample customers)
     // ============================================
     console.log("Seeding customers...")
+
+    await db.customer.upsert({
+        where: { id: WALK_IN_CUSTOMER_ID },
+        update: { name: WALK_IN_CUSTOMER_NAME },
+        create: { id: WALK_IN_CUSTOMER_ID, name: WALK_IN_CUSTOMER_NAME },
+    });
+    console.log(`System customer: ${WALK_IN_CUSTOMER_NAME} (${WALK_IN_CUSTOMER_ID})`);
     
     const customers = await Promise.all([
         upsertCustomer("Ana Reyes", "09171234567"),
@@ -144,14 +154,117 @@ async function main(){
 
     console.log(`Created ${customers.length} customers`);
 
+    // ============================================
+    // INVENTORY: Hair color products & variants
+    // ============================================
+    console.log("Seeding hair color inventory...")
+
+    const hairColorMaterials = [
+        // Loreal Majirel variants
+        {
+            name: "5.1 Ash Brown",
+            brand: "Loreal",
+            productName: "Majirel",
+            category: "HAIR_COLOR" as const,
+            unit: "tube",
+            stock: 3,
+        },
+        {
+            name: "6.3 Golden Brown",
+            brand: "Loreal",
+            productName: "Majirel",
+            category: "HAIR_COLOR" as const,
+            unit: "tube",
+            stock: 5,
+        },
+        {
+            name: "7.1 Dark Blonde",
+            brand: "Loreal",
+            productName: "Majirel",
+            category: "HAIR_COLOR" as const,
+            unit: "tube",
+            stock: 4,
+        },
+        // Matrix SoColor variants
+        {
+            name: "6A Dark Ash Blonde",
+            brand: "Matrix",
+            productName: "SoColor",
+            category: "HAIR_COLOR" as const,
+            unit: "tube",
+            stock: 4,
+        },
+        {
+            name: "7C Copper Blonde",
+            brand: "Matrix",
+            productName: "SoColor",
+            category: "HAIR_COLOR" as const,
+            unit: "tube",
+            stock: 6,
+        },
+        // Developers
+        {
+            name: "20 Volume Developer",
+            brand: "Loreal",
+            productName: "Oxydant",
+            category: "DEVELOPER" as const,
+            unit: "bottle",
+            stock: 10,
+        },
+        {
+            name: "30 Volume Developer",
+            brand: "Matrix",
+            productName: "Cream Developer",
+            category: "DEVELOPER" as const,
+            unit: "bottle",
+            stock: 8,
+        },
+    ];
+
+    for (const material of hairColorMaterials) {
+        const existing = await db.material.findFirst({
+            where: {
+                name: material.name,
+                brand: material.brand,
+                productName: material.productName,
+            },
+        });
+
+        if (!existing) {
+            await db.material.create({
+                data: material,
+            });
+        } else {
+            await db.material.update({
+                where: { id: existing.id },
+                data: {
+                    brand: material.brand,
+                    productName: material.productName,
+                    category: material.category,
+                    unit: material.unit,
+                    stock: existing.stock || material.stock,
+                },
+            });
+        }
+    }
+
+    console.log("Hair color inventory seeded.");
+
     console.log("Seeding services...")
 
     const services = [
-        { name: "Haircut", price: 250, durationMin: 30 },
-        { name: "Hair Coloring", price: 1500, durationMin: 120 },
-        { name: "Manicure", price: 300, durationMin: 45 },
-        { name: "Pedicure", price: 350, durationMin: 60 },
-        { name: "Hair Spa", price: 800, durationMin: 90 },
+        { name: "Haircut", category: "Haircut" as const, price: 250, durationMin: 30 },
+        { name: "Hair Coloring", category: "Hair_Coloring" as const, price: 1500, durationMin: 120 },
+        { name: "Full Hair Color", category: "Hair_Coloring" as const, price: 1800, durationMin: 150 },
+        { name: "Balayage", category: "Hair_Coloring" as const, price: 2500, durationMin: 180 },
+        { name: "Hair Spa", category: "Treatment" as const, price: 800, durationMin: 90 },
+        { name: "Keratin Treatment", category: "Treatment" as const, price: 3500, durationMin: 120 },
+        { name: "Rebond", category: "Rebond" as const, price: 4000, durationMin: 240 },
+        { name: "Perm", category: "Perm" as const, price: 1200, durationMin: 90 },
+        { name: "Blow Dry & Styling", category: "Styling" as const, price: 400, durationMin: 45 },
+        { name: "Manicure", category: "Nails" as const, price: 300, durationMin: 45 },
+        { name: "Pedicure", category: "Nails" as const, price: 350, durationMin: 60 },
+        { name: "Gel Nails", category: "Nails" as const, price: 600, durationMin: 60 },
     ];
 
     for (const service of services) {
@@ -163,10 +276,119 @@ async function main(){
             await db.service.create({
                 data: service,
             });
+        } else {
+            await db.service.update({
+                where: { id: existing.id },
+                data: { category: service.category },
+            });
         }
     }
 
     console.log("Services seeded.")
+
+    // ============================================
+    // SERVICE ↔ MATERIAL RECIPES (required for stock deduction on sale)
+    // ============================================
+    console.log("Linking hair coloring services to materials...")
+    const tubeColor = await db.material.findFirst({
+        where: { name: "5.1 Ash Brown", brand: "Loreal", productName: "Majirel" },
+    })
+    const developer = await db.material.findFirst({
+        where: { name: "30 Volume Developer", brand: "Matrix", productName: "Cream Developer" },
+    })
+    const hairColoringRecipe = [
+        { materialId: tubeColor?.id, qty: 1 },
+        { materialId: developer?.id, qty: 0.5 },
+    ].filter((x): x is { materialId: string; qty: number } => Boolean(x.materialId))
+
+    if (hairColoringRecipe.length > 0) {
+        const colorServiceNames = ["Hair Coloring", "Full Hair Color", "Balayage"] as const
+        for (const name of colorServiceNames) {
+            const svc = await db.service.findFirst({ where: { name } })
+            if (!svc) continue
+            await db.serviceMaterial.deleteMany({ where: { serviceId: svc.id } })
+            await db.serviceMaterial.createMany({
+                data: hairColoringRecipe.map((r) => ({
+                    serviceId: svc.id,
+                    materialId: r.materialId,
+                    quantity: r.qty,
+                })),
+            })
+            await db.service.update({
+                where: { id: svc.id },
+                data: { usesMaterials: true },
+            })
+        }
+        console.log("Hair coloring services linked to inventory materials.")
+    } else {
+        console.warn("Skipped service–material links: materials not found (run hair color seed first).")
+    }
+
+    // ============================================
+    // DEMO SALES (Mar 1–22, 2026) — random times for chart testing
+    // ============================================
+    console.log("Seeding demo sales (Mar 2026)...")
+
+    const marchStart = new Date(2026, 2, 1, 0, 0, 0, 0)
+    const marchEnd = new Date(2026, 2, 22, 23, 59, 59, 999)
+
+    const demoBranch = branches[0]
+    const branchStaffList = await db.staff.findMany({
+        where: { branchId: demoBranch.id },
+    })
+    const demoServices = await db.service.findMany({
+        where: { isActive: true },
+    })
+
+    if (branchStaffList.length === 0 || demoServices.length === 0) {
+        console.warn("Skipped demo sales: need at least one staff and one service on the branch.")
+    } else {
+        const demoSaleFilter = { name: "Chart seed demo" as const }
+        await db.saleService.deleteMany({ where: { sale: demoSaleFilter } })
+        await db.saleAddOn.deleteMany({ where: { sale: demoSaleFilter } })
+        await db.saleMaterial.deleteMany({ where: { sale: demoSaleFilter } })
+        await db.payment.deleteMany({ where: { sale: demoSaleFilter } })
+        await db.sale.deleteMany({ where: demoSaleFilter })
+
+        const randomEndedAt = () =>
+            new Date(
+                marchStart.getTime() +
+                    Math.random() * (marchEnd.getTime() - marchStart.getTime()),
+            )
+
+        for (let i = 0; i < 10; i++) {
+            const endedAt = randomEndedAt()
+            const staff = branchStaffList[Math.floor(Math.random() * branchStaffList.length)]!
+            const service = demoServices[Math.floor(Math.random() * demoServices.length)]!
+            const createdAt = new Date(
+                endedAt.getTime() - (30 + Math.random() * 90) * 60 * 1000,
+            )
+
+            await db.sale.create({
+                data: {
+                    branchId: demoBranch.id,
+                    staffId: staff.id,
+                    name: "Chart seed demo",
+                    status: SaleStatus.COMPLETED,
+                    basePrice: service.price,
+                    addOns: 0,
+                    total: service.price,
+                    endedAt,
+                    createdAt,
+                    saleServices: {
+                        create: {
+                            serviceId: service.id,
+                            qty: 1,
+                            price: service.price,
+                        },
+                    },
+                },
+            })
+        }
+
+        console.log("Created 10 demo sales (Mar 1–22, 2026, random times).")
+    }
+
     console.log("\n=== Summary ===")
     console.log(`Owner: owner@vanity.com (password: owner123)`)
     console.log(`Branches: ${branches.map((b: { name: string }) => b.name).join(", ")}`)

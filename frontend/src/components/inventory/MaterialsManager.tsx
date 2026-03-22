@@ -1,5 +1,6 @@
 "use client";
 
+import type { MaterialCategory } from "@prisma/client";
 import { useState } from "react";
 import { Plus, Pencil, Trash2, X, Check, Package, AlertTriangle } from "lucide-react";
 
@@ -8,6 +9,7 @@ type Material = {
   name: string;
   unit: string;
   stock: number;
+  category: MaterialCategory;
 };
 
 type Props = {
@@ -18,13 +20,25 @@ type MaterialForm = {
   name: string;
   unit: string;
   stock: number;
+  category: MaterialCategory;
 };
 
 const emptyForm: MaterialForm = {
   name: "",
   unit: "pcs",
   stock: 0,
+  category: "OTHER",
 };
+
+const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
+  { value: "OTHER", label: "None (general)" },
+  { value: "HAIR_COLOR", label: "Hair color" },
+  { value: "DEVELOPER", label: "Developer" },
+];
+
+function categoryLabel(category: MaterialCategory): string {
+  return CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? category;
+}
 
 const commonUnits = ["pcs", "ml", "g", "oz", "tube", "bottle", "box"];
 
@@ -49,6 +63,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
       name: material.name,
       unit: material.unit,
       stock: material.stock,
+      category: material.category,
     });
   };
 
@@ -165,6 +180,9 @@ export default function MaterialsManager({ initialMaterials }: Props) {
               <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">
                 Material Name
               </th>
+              <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 min-w-[11rem]">
+                Type
+              </th>
               <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">
                 Unit
               </th>
@@ -189,6 +207,21 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                     className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     autoFocus
                   />
+                </td>
+                <td className="px-4 py-3">
+                  <select
+                    value={formData.category}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value as MaterialCategory })
+                    }
+                    className="w-full max-w-[13rem] px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                  >
+                    {CATEGORY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-4 py-3">
                   <select
@@ -249,6 +282,21 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       <select
+                        value={formData.category}
+                        onChange={(e) =>
+                          setFormData({ ...formData, category: e.target.value as MaterialCategory })
+                        }
+                        className="w-full max-w-[13rem] px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      >
+                        {CATEGORY_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
                         value={formData.unit}
                         onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                         className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -295,6 +343,9 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                         <Package size={16} className="text-slate-400" />
                         <span className="font-medium text-slate-900">{material.name}</span>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {categoryLabel(material.category)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-600">
                       {material.unit}
@@ -357,7 +408,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
             {/* Empty State */}
             {materials.length === 0 && !isAddingNew && (
               <tr>
-                <td colSpan={4} className="px-4 py-12 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-12 text-center text-slate-500">
                   No materials yet. Click "Add Material" to create one.
                 </td>
               </tr>

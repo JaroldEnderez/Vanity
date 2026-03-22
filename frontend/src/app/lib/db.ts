@@ -3,9 +3,12 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaPg } from "@prisma/adapter-pg";
 import path from "path";
 
-// DATABASE_URL or Neon-style name (e.g. VANITY_DB_URL) when you can't rename in Vercel
+// Local: use DEV_DATABASE_URL (or DATABASE_URL). Vercel: use DATABASE_URL (prod).
 function getDatabaseUrl(): string {
-  const u = process.env.DATABASE_URL;
+  if (process.env.VERCEL) {
+    return process.env.DATABASE_URL ?? "";
+  }
+  const u = process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
   if (u) return u;
   const key = Object.keys(process.env).find(
     (k) =>
@@ -39,6 +42,16 @@ const connectionString = isSqlite
 if (!process.env.DATABASE_URL) process.env.DATABASE_URL = connectionString;
 
 // Prisma 7 requires adapter. Postgres: PrismaPg; SQLite only when DATABASE_URL=file:...
-export const db = isPostgres
-  ? new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
-  : new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: connectionString }) });
+// Use a singleton in development to avoid "Invalid invocation" / multiple client instances on HMR.
+function createPrismaClient(): PrismaClient {
+  return isPostgres
+    ? new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
+    : new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: connectionString }) });
+}
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
+export const db = globalForPrisma.prisma ?? createPrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+
+/** Default interactive tx timeout is 5s — too low for Neon / pooler latency. */
+export const interactiveTxOptions = { maxWait: 10_000, timeout: 30_000 } as const;
