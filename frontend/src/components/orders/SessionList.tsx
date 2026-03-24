@@ -4,6 +4,7 @@ import { useSaleStore, DraftSale } from "@/src/app/store/saleStore";
 import { useToastStore } from "@/src/app/store/toastStore";
 import { Plus, Clock, CheckCircle, AlertTriangle, Trash2, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { formatPHP } from "@/src/app/lib/money";
 
 type Props = {
   staffId: string;
@@ -163,7 +164,7 @@ export default function SessionList({ staffId }: Props) {
 
                   {/* Total */}
                   <div className="text-right flex-shrink-0">
-                    <div className="font-semibold text-sm md:text-base text-slate-900">₱{draft.total.toFixed(2)}</div>
+                    <div className="font-semibold text-sm md:text-base text-slate-900">{formatPHP(draft.total)}</div>
                   </div>
 
                   {/* Actions */}
@@ -215,7 +216,7 @@ export default function SessionList({ staffId }: Props) {
             {draftSales.length} session{draftSales.length !== 1 ? "s" : ""}
           </span>
           <span className="font-medium text-slate-900">
-            Total: ₱{draftSales.reduce((sum, d) => sum + d.total, 0).toFixed(2)}
+            Total: {formatPHP(draftSales.reduce((sum, d) => sum + d.total, 0))}
           </span>
         </div>
       )}

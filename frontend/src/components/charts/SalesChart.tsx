@@ -1,6 +1,7 @@
 "use client";
 
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { formatPHP } from "@/src/app/lib/money";
 
 type SalesData = {
   period: string;
@@ -36,7 +37,7 @@ export default function SalesChart({ data, interval, title }: Props) {
       <div className="mb-4">
         {title && <h3 className="text-lg font-semibold text-slate-900">{title}</h3>}
         <p className="mt-1 text-sm text-slate-500">
-          Total <span className="font-medium text-slate-700">₱{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          Total <span className="font-medium text-slate-700">{formatPHP(totalRevenue)}</span>
         </p>
       </div>
 
@@ -55,7 +56,7 @@ export default function SalesChart({ data, interval, title }: Props) {
           <YAxis
             stroke="#64748b"
             fontSize={12}
-            tickFormatter={(value) => `₱${Number(value).toLocaleString()}`}
+            tickFormatter={(value) => formatPHP(Number(value))}
             label={{ value: "Sales", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 12 }}
           />
           <Tooltip
@@ -64,7 +65,7 @@ export default function SalesChart({ data, interval, title }: Props) {
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
             }}
-            formatter={(value) => [`₱${Number(value ?? 0).toFixed(2)}`, "Sales"]}
+            formatter={(value) => [formatPHP(Number(value ?? 0)), "Sales"]}
             labelFormatter={(label) => String(label)}
           />
           <DataComponent

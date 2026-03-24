@@ -24,7 +24,7 @@ const navItems = [
   { label: "Customers", href: "/dashboard/customers", icon: Users },
   { label: "Staff", href: "/dashboard/staff", icon: UserCog },
   { label: "Sales History", href: "/dashboard/sales", icon: History },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  // { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ]
 
 type Props = {

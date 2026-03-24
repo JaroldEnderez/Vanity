@@ -8,6 +8,7 @@ import ServicesSection from "./services/ServicesSection";
 import SalePanel from "./sale/SalePanel";
 import Drawer from "@/src/components/ui/Drawer";
 import { Loader2, Pencil, Check, X, AlertCircle } from "lucide-react";
+import { formatPHP } from "@/src/app/lib/money";
 
 type Props = {
   services: Service[];
@@ -98,7 +99,7 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
       <p className="text-xs md:text-sm text-slate-500">
         <span className="font-mono text-[10px] md:text-xs text-slate-400">#{draft.id.slice(0, 8)}</span>
         {" • "}
-        {serviceCount} {serviceLabel} • ₱{draft.total.toFixed(2)}
+        {serviceCount} {serviceLabel} • {formatPHP(draft.total)}
       </p>
     </div>
   );

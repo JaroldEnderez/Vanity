@@ -6,6 +6,7 @@ import { useToastStore } from "@/src/app/store/toastStore";
 import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
 import StartSaleButton from "./StartSaleButton";
 import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X, User, UserPlus } from "lucide-react";
+import { formatPHP } from "@/src/app/lib/money";
 
 // Staff type for dropdown
 type Staff = {
@@ -438,7 +439,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm md:text-base truncate">{item.name}</div>
                         <div className="text-xs text-slate-500">
-                          ₱{item.price} × {item.qty}
+                          {formatPHP(item.price)} × {item.qty}
                         </div>
                         {item.coloringDetails && (item.coloringDetails.colorUsed || item.coloringDetails.developer || item.coloringDetails.itemStaffName || item.coloringDetails.remarks) && (
                           <div className="mt-2 text-xs text-slate-600 space-y-0.5">
@@ -458,7 +459,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                         )}
                       </div>
                       <div className="flex items-start gap-2 flex-shrink-0">
-                        <span className="text-xs md:text-sm font-medium">₱{(item.price * item.qty).toFixed(2)}</span>
+                        <span className="text-xs md:text-sm font-medium">{formatPHP(item.price * item.qty)}</span>
                         {!activeDraft.isPaid && (
                           <button
                             onClick={() => removeItemFromDraft(activeDraft.id, item.id)}
@@ -530,11 +531,11 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
             <div className="text-xs md:text-sm">
                 <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span>₱{activeDraft.subtotal.toFixed(2)}</span>
+                    <span>{formatPHP(activeDraft.subtotal)}</span>
                 </div>
                 <div className="flex justify-between font-semibold text-sm md:text-base">
                     <span>Total</span>
-                    <span>₱{activeDraft.total.toFixed(2)}</span>
+                    <span>{formatPHP(activeDraft.total)}</span>
                 </div>
             </div>
 
@@ -565,7 +566,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                       {/* Insufficient tooltip - only show when cash entered is less than total */}
                       {cashAmount > 0 && !isValidPayment && (
                         <p className="text-[10px] md:text-xs text-red-500">
-                          Insufficient amount (need ₱{(activeDraft.total - cashAmount).toFixed(2)} more)
+                          Insufficient amount (need {formatPHP(activeDraft.total - cashAmount)} more)
                         </p>
                       )}
                     </div>
@@ -591,15 +592,15 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                           <div className="text-sm text-slate-600 mb-3 space-y-1">
                             <div className="flex justify-between">
                               <span>Total:</span>
-                              <span className="font-medium">₱{activeDraft.total.toFixed(2)}</span>
+                              <span className="font-medium">{formatPHP(activeDraft.total)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Cash:</span>
-                              <span className="font-medium">₱{cashAmount.toFixed(2)}</span>
+                              <span className="font-medium">{formatPHP(cashAmount)}</span>
                             </div>
                             <div className="flex justify-between text-green-600 font-semibold">
                               <span>Change:</span>
-                              <span>₱{changeAmount.toFixed(2)}</span>
+                              <span>{formatPHP(changeAmount)}</span>
                             </div>
                           </div>
                           <div className="flex gap-2">

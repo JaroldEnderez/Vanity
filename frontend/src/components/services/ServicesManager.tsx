@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, X, Check, Clock, Package, ChevronUp, ChevronDown } from "lucide-react";
+import { formatPHP } from "@/src/app/lib/money";
 
 type Material = {
   id: string;
@@ -525,7 +526,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="font-medium text-slate-900">₱{service.price.toFixed(2)}</span>
+                      <span className="font-medium text-slate-900">{formatPHP(service.price)}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button

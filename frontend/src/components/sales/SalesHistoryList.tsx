@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { CheckCircle, ChevronDown, ChevronRight } from "lucide-react";
 
+import { formatPHP } from "@/src/app/lib/money";
+
 type SaleService = {
   id: string;
   qty: number;
@@ -124,7 +126,7 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
 
         {/* Total and dates on the right */}
         <div className="text-right flex-shrink-0">
-          <div className="font-semibold text-sm md:text-base text-slate-900">₱{sale.total.toFixed(2)}</div>
+          <div className="font-semibold text-sm md:text-base text-slate-900">{formatPHP(sale.total)}</div>
           <div className="text-[10px] md:text-xs text-slate-500">
             <span className="text-slate-400 hidden md:inline">Started: </span>
             <span className="md:hidden">S: </span>
@@ -208,7 +210,7 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
                     )}
                   </div>
                   <div className="flex-shrink-0 font-medium tabular-nums">
-                    ₱{(ss.price * ss.qty).toFixed(2)}
+                    {formatPHP(ss.price * ss.qty)}
                   </div>
                 </div>
               );
@@ -219,31 +221,31 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
           <div className="border-t border-slate-300 pt-3 space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Subtotal</span>
-              <span>₱{sale.basePrice.toFixed(2)}</span>
+              <span>{formatPHP(sale.basePrice)}</span>
             </div>
             {sale.addOns > 0 && (
               <div className="flex justify-between">
                 <span className="text-slate-500">Add-ons</span>
-                <span>₱{sale.addOns.toFixed(2)}</span>
+                <span>{formatPHP(sale.addOns)}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold text-slate-900">
               <span>Total</span>
-              <span>₱{sale.total.toFixed(2)}</span>
+              <span>{formatPHP(sale.total)}</span>
             </div>
             {(sale.cashReceived != null || sale.changeGiven != null) && (
               <div className="pt-2 mt-2 border-t border-slate-300 space-y-1">
                 {sale.cashReceived != null && (
                   <div className="flex justify-between text-slate-700">
                     <span className="text-slate-500">Cash received</span>
-                    <span className="tabular-nums">₱{Number(sale.cashReceived).toFixed(2)}</span>
+                    <span className="tabular-nums">{formatPHP(Number(sale.cashReceived))}</span>
                   </div>
                 )}
                 {sale.changeGiven != null && (
                   <div className="flex justify-between text-slate-700">
                     <span className="text-slate-500">Change given</span>
                     <span className="tabular-nums font-medium text-emerald-800">
-                      ₱{Number(sale.changeGiven).toFixed(2)}
+                      {formatPHP(Number(sale.changeGiven))}
                     </span>
                   </div>
                 )}
@@ -278,7 +280,7 @@ export default function SalesHistoryList({ sales, emptyMessage = "No sales found
         <div className="flex justify-between items-center">
           <div>
             <div className="text-green-100 text-sm">Total Revenue</div>
-            <div className="text-3xl font-bold">₱{totalRevenue.toFixed(2)}</div>
+            <div className="text-3xl font-bold">{formatPHP(totalRevenue)}</div>
           </div>
           <div className="text-right">
             <div className="text-green-100 text-sm">Completed Sales</div>

@@ -2,6 +2,7 @@
 
 import { Service } from "@/src/app/types/service";
 import { useSaleStore } from "@/src/app/store/saleStore";
+import { formatPHP } from "@/src/app/lib/money";
 
 type Props = {
   service: Service;
@@ -41,7 +42,7 @@ export default function ServiceCard({ service, onSelect, onHover, isHighlighted 
       </div>
 
       <div className="mt-4 text-lg font-semibold text-slate-800">
-        ₱{service.price.toFixed(2)}
+        {formatPHP(service.price)}
       </div>
     </button>
   );
