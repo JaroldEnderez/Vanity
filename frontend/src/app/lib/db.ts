@@ -3,12 +3,15 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaPg } from "@prisma/adapter-pg";
 import path from "path";
 
-// Local: use DEV_DATABASE_URL (or DATABASE_URL). Vercel: use DATABASE_URL (prod).
+// Local: DEV_DATABASE_URL, then VANITY_DATABASE_URL / DATABASE_URL. Vercel: VANITY_DATABASE_URL, then DATABASE_URL.
 function getDatabaseUrl(): string {
   if (process.env.VERCEL) {
-    return process.env.DATABASE_URL ?? "";
+    return process.env.VANITY_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
   }
-  const u = process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+  const u =
+    process.env.DEV_DATABASE_URL ??
+    process.env.VANITY_DATABASE_URL ??
+    process.env.DATABASE_URL;
   if (u) return u;
   const key = Object.keys(process.env).find(
     (k) =>
