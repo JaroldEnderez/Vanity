@@ -1,12 +1,20 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-// Local (migrate/seed): DEV_DATABASE_URL or DATABASE_URL. Vercel uses DATABASE_URL in env.
+// Local (migrate/seed): DEV_DATABASE_URL, then VANITY_DATABASE_URL / DATABASE_URL.
+// Vercel: VANITY_DATABASE_URL (preferred), then DATABASE_URL.
 function getDatabaseUrl(): string {
   if (process.env.VERCEL) {
-    return process.env.DATABASE_URL ?? "postgresql://localhost:5432/placeholder";
+    return (
+      process.env.VANITY_DATABASE_URL ??
+      process.env.DATABASE_URL ??
+      "postgresql://localhost:5432/placeholder"
+    );
   }
-  const u = process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+  const u =
+    process.env.DEV_DATABASE_URL ??
+    process.env.VANITY_DATABASE_URL ??
+    process.env.DATABASE_URL;
   if (u) return u;
   const key = Object.keys(process.env).find(
     (k) =>
