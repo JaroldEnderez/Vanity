@@ -56,6 +56,7 @@ model Staff {
 model Service {
   id            String            @id @default(uuid())
   name          String            @unique
+  category      String            @default("default")
   description   String?
   durationMin   Int?
   price         Float
@@ -69,17 +70,27 @@ model Service {
   materials     ServiceMaterial[]
 
   @@index([isActive, branchId]) // Optimize service queries
+  @@index([category])
 }
 
 model Material {
   id                 String              @id @default(uuid())
   name               String
+  brand              String?
+  productName        String?
+  category           MaterialCategory    @default(OTHER)
   unit               String
   stock              Float
   createdAt          DateTime            @default(now())
   inventoryMovements InventoryMovement[]
   saleMaterials      SaleMaterial[]
   serviceMaterials   ServiceMaterial[]
+}
+
+enum MaterialCategory {
+  HAIR_COLOR
+  DEVELOPER
+  OTHER
 }
 
 model ServiceMaterial {
@@ -152,6 +163,13 @@ model SaleService {
   qty       Int      @default(1)
   price     Float    // unit price at time of sale
 
+  // Hair Coloring extra fields (only used when service category is Hair_coloring)
+  serviceDisplayName String?  // e.g. "Full Hair Color"
+  colorUsed          String?
+  developer          String?  // e.g. "30 Volume"
+  itemStaffName     String?  // staff who performed this service
+  remarks            String?
+
   sale      Sale     @relation(fields: [saleId], references: [id])
   service   Service  @relation(fields: [serviceId], references: [id])
 
@@ -172,11 +190,14 @@ model SaleMaterial {
 }
 
 model Customer {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String?  @unique
-  createdAt DateTime @default(now())
-  sales     Sale[]
+  id          String    @id @default(uuid())
+  name        String
+  address     String?
+  phone       String?   @unique  // Contact number
+  fb          String?   // Facebook
+  dateOfBirth DateTime?
+  createdAt   DateTime  @default(now())
+  sales       Sale[]
 }
 
 model Payment {

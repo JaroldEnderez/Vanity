@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionById, updateSession, deleteSession } from "@/src/app/lib/sessions";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { ensureWalkInCustomer } from "@/src/app/lib/ensureWalkInCustomer";
+import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
 
 // GET /sessions/:id → get single session
 export async function GET(
@@ -49,10 +51,24 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const session = await updateSession(id, {
-      name: body.name,
-      customerId: body.customerId,
-    });
+    await ensureWalkInCustomer();
+
+    const data: { name?: string; customerId?: string; staffId?: string } = {};
+    if (typeof body.name === "string") {
+      data.name = body.name.trim();
+    }
+    if (typeof body.staffId === "string" && body.staffId.trim()) {
+      data.staffId = body.staffId.trim();
+    }
+    if ("customerId" in body) {
+      const cid = body.customerId;
+      data.customerId =
+        cid === null || cid === undefined || cid === ""
+          ? WALK_IN_CUSTOMER_ID
+          : String(cid).trim();
+    }
+
+    const session = await updateSession(id, data);
 
     return NextResponse.json(session);
   } catch (error) {

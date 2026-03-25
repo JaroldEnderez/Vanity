@@ -26,9 +26,9 @@ export default function SalesChartLoader({ interval, startDate, endDate, title }
       let url = `/api/sales/analytics?interval=${interval}`;
       
       if (interval !== "hour" && startDate && endDate) {
-        const start = startDate.toISOString().split("T")[0];
-        const end = endDate.toISOString().split("T")[0];
-        url += `&startDate=${start}&endDate=${end}`;
+        const ymd = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        url += `&startDate=${ymd(startDate)}&endDate=${ymd(endDate)}`;
       }
 
       const res = await fetch(url);

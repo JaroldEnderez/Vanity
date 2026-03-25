@@ -7,11 +7,15 @@ import { SaleStatus } from "@prisma/client";
 const saleListInclude = {
   branch: { select: { id: true, name: true } },
   staff: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true } },
   saleServices: {
     select: {
       id: true,
       qty: true,
       price: true,
+      serviceDisplayName: true,
+      colorUsed: true,
+      developer: true,
       service: { select: { id: true, name: true } },
     },
   },
@@ -58,14 +62,34 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const sale = await createSale(body);
+    const branchId = await getAuthBranchId();
+    const body = (await req.json()) as {
+      staffId?: string;
+      customerId?: string;
+      services?: Array<{ serviceId: string; qty: number; price: number }>;
+      addOns?: Array<{ addOnId: string; price: number }>;
+      materials?: Array<{ materialId: string; quantity: number }>;
+    };
+    if (!body.staffId || !body.services?.length) {
+      return NextResponse.json(
+        { error: "staffId and services are required" },
+        { status: 400 }
+      );
+    }
+    // Never trust client-supplied branchId (IDOR)
+    const sale = await createSale({
+      branchId,
+      staffId: body.staffId,
+      customerId: body.customerId,
+      services: body.services,
+      addOns: body.addOns,
+      materials: body.materials,
+    });
     return NextResponse.json(sale, { status: 201 });
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "Failed to create sale" },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Failed to create sale";
+    const status = message.includes("Unauthorized") ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

@@ -1,51 +1,66 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import SalesChartLoader from "@/src/components/charts/SalesChartLoader";
 import SalesHistoryList from "@/src/components/sales/SalesHistoryList";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-type Interval = "daily" | "weekly" | "monthly";
+type QuickFilter = "today" | "last7" | "last30" | "thisYear" | "allTime" | "custom";
+
 type Sale = {
   id: string;
   name: string | null;
   total: number;
   basePrice: number;
   addOns: number;
+  cashReceived?: number | null;
+  changeGiven?: number | null;
   createdAt: Date;
   endedAt: Date | null;
   status: string;
+  customer: { id: string; name: string } | null;
   staff: { id: string; name: string } | null;
   branch: { id: string; name: string } | null;
   saleServices: Array<{
     id: string;
     qty: number;
     price: number;
+    serviceDisplayName?: string | null;
+    colorUsed?: string | null;
+    developer?: string | null;
     service: { id: string; name: string };
   }>;
 };
 
-function toDateInputString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+function getDateRangeForQuickFilter(filter: QuickFilter): { start: Date; end: Date } {
+  const today = new Date();
+  const end = new Date(today);
+  end.setHours(23, 59, 59, 999);
 
-function startOfDay(d: Date): Date {
-  const out = new Date(d);
-  out.setHours(0, 0, 0, 0);
-  return out;
-}
+  const start = new Date(today);
+  start.setHours(0, 0, 0, 0);
 
-function endOfDay(d: Date): Date {
-  const out = new Date(d);
-  out.setHours(23, 59, 59, 999);
-  return out;
-}
+  switch (filter) {
+    case "today":
+      break;
+    case "last7":
+      start.setDate(start.getDate() - 6);
+      break;
+    case "last30":
+      start.setDate(start.getDate() - 29);
+      break;
+    case "thisYear":
+      start.setMonth(0, 1);
+      break;
+    case "allTime":
+      start.setTime(0);
+      end.setHours(23, 59, 59, 999);
+      break;
+    case "custom":
+      break;
+  }
 
-function parseDateInput(value: string): Date {
-  const [y, m, d] = value.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return { start, end };
 }
 
 function formatMMDDYY(d: Date): string {
@@ -56,10 +71,28 @@ function formatMMDDYY(d: Date): string {
 }
 
 export default function SalesHistoryPage() {
-  const [interval, setInterval] = useState<Interval>("daily");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("last7");
+  const [chartOpen, setChartOpen] = useState(true);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
+  const dateRange = useMemo(() => {
+    if (quickFilter !== "custom") return getDateRangeForQuickFilter(quickFilter);
+
+    const fallback = getDateRangeForQuickFilter("last7");
+    if (!customStart || !customEnd) return fallback;
+
+    const start = new Date(`${customStart}T00:00:00`);
+    const end = new Date(`${customEnd}T23:59:59.999`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+      return fallback;
+    }
+
+    return { start, end };
+  }, [quickFilter, customStart, customEnd]);
 
   const loadSales = useCallback(async (start: Date, end: Date) => {
     setLoading(true);
@@ -79,54 +112,8 @@ export default function SalesHistoryPage() {
   }, []);
 
   useEffect(() => {
-    const today = new Date();
-    let start: Date;
-    let end: Date = new Date(today);
-
-    switch (interval) {
-      case "daily":
-        start = new Date(today);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-        break;
-      case "weekly":
-        start = new Date(today);
-        start.setDate(today.getDate() - today.getDay());
-        start.setHours(0, 0, 0, 0);
-        end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        end.setHours(23, 59, 59, 999);
-        break;
-      case "monthly":
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        start.setHours(0, 0, 0, 0);
-        end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
-        break;
-    }
-
-    setDateRange({ start, end });
-    loadSales(start, end);
-  }, [interval, loadSales]);
-
-  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (!value) return;
-    const start = startOfDay(parseDateInput(value));
-    setDateRange((prev) => {
-      loadSales(start, endOfDay(prev.end));
-      return { ...prev, start };
-    });
-  };
-
-  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (!value) return;
-    const end = endOfDay(parseDateInput(value));
-    setDateRange((prev) => {
-      loadSales(startOfDay(prev.start), end);
-      return { ...prev, end };
-    });
-  };
+    loadSales(dateRange.start, dateRange.end);
+  }, [dateRange, loadSales]);
 
   return (
     <div className="space-y-6">
@@ -137,76 +124,90 @@ export default function SalesHistoryPage() {
         </p>
       </div>
 
-      {/* Editable date range + preset toggles */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label htmlFor="start-date" className="text-sm font-medium text-slate-700 sr-only">
-            Start date
-          </label>
-          <input
-            id="start-date"
-            type="date"
-            value={toDateInputString(dateRange.start)}
-            onChange={handleStartDateChange}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-          />
-        </div>
-        <span className="text-slate-500 text-sm">to</span>
-        <div className="flex items-center gap-2">
-          <label htmlFor="end-date" className="text-sm font-medium text-slate-700 sr-only">
-            End date
-          </label>
-          <input
-            id="end-date"
-            type="date"
-            value={toDateInputString(dateRange.end)}
-            onChange={handleEndDateChange}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-          />
-        </div>
-        <span className="text-slate-400 text-sm mx-1">|</span>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Date range">
+        {(
+          [
+            { id: "today" as const, label: "Today" },
+            { id: "last7" as const, label: "Last 7 days" },
+            { id: "last30" as const, label: "Last 30 days" },
+            { id: "thisYear" as const, label: "This Year" },
+            { id: "allTime" as const, label: "All Time" },
+            { id: "custom" as const, label: "Custom Range" },
+          ] as const
+        ).map(({ id, label }) => (
           <button
-            onClick={() => setInterval("daily")}
-            className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
-              interval === "daily"
-                ? "bg-emerald-600 text-white"
+            key={id}
+            type="button"
+            onClick={() => setQuickFilter(id)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+              quickFilter === id
+                ? "bg-slate-900 text-white"
                 : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"
             }`}
           >
-            Daily
+            {label}
           </button>
-          <button
-            onClick={() => setInterval("weekly")}
-            className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
-              interval === "weekly"
-                ? "bg-emerald-600 text-white"
-                : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            Weekly
-          </button>
-          <button
-            onClick={() => setInterval("monthly")}
-            className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
-              interval === "monthly"
-                ? "bg-emerald-600 text-white"
-                : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            Monthly
-          </button>
-        </div>
+        ))}
       </div>
-
-      {loading ? (
-        <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-slate-400 mx-auto" />
-          <p className="mt-4 text-slate-500">Loading sales...</p>
+      {quickFilter === "custom" && (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm text-slate-600">
+            <span className="block mb-1">Start</span>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </label>
+          <label className="text-sm text-slate-600">
+            <span className="block mb-1">End</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </label>
         </div>
-      ) : (
-        <SalesHistoryList sales={sales} emptyMessage="No sales completed in this period" />
       )}
+
+      <section className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setChartOpen((o) => !o)}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition"
+          aria-expanded={chartOpen}
+        >
+          <span className="text-base font-semibold text-slate-900">Sales chart</span>
+          {chartOpen ? (
+            <ChevronUp className="w-5 h-5 text-slate-500 shrink-0" aria-hidden />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-slate-500 shrink-0" aria-hidden />
+          )}
+        </button>
+        {chartOpen && (
+          <div className="px-4 pb-4 border-t border-slate-100">
+            <SalesChartLoader
+              interval="day"
+              startDate={dateRange.start}
+              endDate={dateRange.end}
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">Transactions</h2>
+        {loading ? (
+          <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-slate-400 mx-auto" />
+            <p className="mt-4 text-slate-500">Loading sales...</p>
+          </div>
+        ) : (
+          <SalesHistoryList sales={sales} emptyMessage="No sales in this period" />
+        )}
+      </section>
     </div>
   );
 }

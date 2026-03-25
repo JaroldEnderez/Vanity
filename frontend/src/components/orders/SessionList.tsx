@@ -1,8 +1,10 @@
 "use client";
 
 import { useSaleStore, DraftSale } from "@/src/app/store/saleStore";
+import { useToastStore } from "@/src/app/store/toastStore";
 import { Plus, Clock, CheckCircle, AlertTriangle, Trash2, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { formatPHP } from "@/src/app/lib/money";
 
 type Props = {
   staffId: string;
@@ -47,6 +49,12 @@ export default function SessionList({ staffId }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleCreate = () => {
+    if (!staffId?.trim()) {
+      useToastStore.getState().show(
+        "Add at least one staff member for this branch before creating a session."
+      );
+      return;
+    }
     startSessionCreation(staffId);
   };
 
@@ -86,7 +94,9 @@ export default function SessionList({ staffId }: Props) {
         {draftSales.length > 0 && (
           <button
             onClick={handleCreate}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm md:text-base w-full sm:w-auto"
+            disabled={!staffId?.trim()}
+            title={!staffId?.trim() ? "Add staff for this branch first" : undefined}
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm md:text-base w-full sm:w-auto disabled:opacity-50 disabled:pointer-events-none"
           >
             <Plus size={16} className="md:w-[18px] md:h-[18px]" />
             <span className="hidden sm:inline">New Session</span>
@@ -108,7 +118,9 @@ export default function SessionList({ staffId }: Props) {
             </p>
             <button
               onClick={handleCreate}
-              className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+              disabled={!staffId?.trim()}
+              title={!staffId?.trim() ? "Add staff for this branch first" : undefined}
+              className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 disabled:pointer-events-none"
             >
               <Plus size={18} />
               Create First Session
@@ -152,7 +164,7 @@ export default function SessionList({ staffId }: Props) {
 
                   {/* Total */}
                   <div className="text-right flex-shrink-0">
-                    <div className="font-semibold text-sm md:text-base text-slate-900">₱{draft.total.toFixed(2)}</div>
+                    <div className="font-semibold text-sm md:text-base text-slate-900">{formatPHP(draft.total)}</div>
                   </div>
 
                   {/* Actions */}
@@ -204,7 +216,7 @@ export default function SessionList({ staffId }: Props) {
             {draftSales.length} session{draftSales.length !== 1 ? "s" : ""}
           </span>
           <span className="font-medium text-slate-900">
-            Total: ₱{draftSales.reduce((sum, d) => sum + d.total, 0).toFixed(2)}
+            Total: {formatPHP(draftSales.reduce((sum, d) => sum + d.total, 0))}
           </span>
         </div>
       )}

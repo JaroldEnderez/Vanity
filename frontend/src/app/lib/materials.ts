@@ -1,4 +1,6 @@
-import { db } from "./db";
+import type { MaterialCategory } from "@prisma/client";
+
+import { db, interactiveTxOptions } from "./db";
 
 // GET all materials
 export async function getAllMaterials() {
@@ -19,9 +21,15 @@ export async function createMaterial(data: {
   name: string;
   unit: string;
   stock: number;
+  category?: MaterialCategory;
 }) {
   return db.material.create({
-    data,
+    data: {
+      name: data.name,
+      unit: data.unit,
+      stock: data.stock,
+      category: data.category ?? "OTHER",
+    },
   });
 }
 
@@ -32,6 +40,7 @@ export async function updateMaterial(
     name: string;
     unit: string;
     stock: number;
+    category: MaterialCategory;
   }>
 ) {
   return db.material.update({
@@ -113,7 +122,7 @@ export async function setServiceMaterials(
       where: { serviceId },
       include: { material: true },
     });
-  });
+  }, interactiveTxOptions);
 }
 
 // GET materials with low stock

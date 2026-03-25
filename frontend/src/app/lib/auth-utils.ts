@@ -25,6 +25,18 @@ export async function getAuthBranchId(): Promise<string> {
 }
 
 /**
+ * Any signed-in user (owner or branch). Use for shared resources (e.g. global materials catalog).
+ * Prefer getAuthBranchId / requireOwner when the route must be role-specific.
+ */
+export async function requireAuthenticatedUser() {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Unauthorized");
+  }
+  return session;
+}
+
+/**
  * Get the current session (server-side)
  */
 export async function getAuthSession() {

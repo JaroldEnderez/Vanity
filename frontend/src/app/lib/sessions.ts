@@ -1,4 +1,8 @@
-import { db } from "./db";
+import { db, interactiveTxOptions } from "./db";
+import {
+  deductMaterialsForSaleCompletion,
+  resolveMaterialsFromServiceRecipes,
+} from "./inventory";
 import { SaleStatus } from "@prisma/client";
 
 // Optimized include - only fetch what's needed
@@ -18,6 +22,7 @@ const sessionInclude = {
         select: {
           id: true,
           name: true,
+          category: true,
           price: true,
           durationMin: true,
           materials: {
@@ -122,7 +127,7 @@ export async function deleteSession(id: string) {
     ]);
 
     return tx.sale.delete({ where: { id } });
-  });
+  }, interactiveTxOptions);
 }
 
 // ADD item to session - Optimized with transaction
@@ -133,6 +138,12 @@ export async function addItemToSession(
     qty: number;
     price: number;
     materials?: Array<{ materialId: string; quantity: number }>;
+    // Hair Coloring extra fields
+    serviceDisplayName?: string;
+    colorUsed?: string;
+    developer?: string;
+    itemStaffName?: string;
+    remarks?: string;
   }
 ) {
   return db.$transaction(async (tx) => {
@@ -149,27 +160,47 @@ export async function addItemToSession(
       throw new Error("Cannot modify completed or cancelled session");
     }
 
-    // Create the sale service and add materials in parallel
-    const [saleService] = await Promise.all([
-      tx.saleService.create({
-        data: {
+    // Explicit line materials (e.g. hair coloring), else default recipe from ServiceMaterial × qty
+    let materialsToCreate: Array<{ materialId: string; quantity: number }>;
+    if (item.materials && item.materials.length > 0) {
+      materialsToCreate = item.materials.map((m) => ({
+        materialId: m.materialId,
+        quantity: m.quantity,
+      }));
+    } else {
+      const recipe = await tx.serviceMaterial.findMany({
+        where: { serviceId: item.serviceId },
+        select: { materialId: true, quantity: true },
+      });
+      materialsToCreate = recipe.map((sm) => ({
+        materialId: sm.materialId,
+        quantity: sm.quantity * item.qty,
+      }));
+    }
+
+    await tx.saleService.create({
+      data: {
+        saleId: sessionId,
+        serviceId: item.serviceId,
+        qty: item.qty,
+        price: item.price,
+        serviceDisplayName: item.serviceDisplayName ?? null,
+        colorUsed: item.colorUsed ?? null,
+        developer: item.developer ?? null,
+        itemStaffName: item.itemStaffName ?? null,
+        remarks: item.remarks ?? null,
+      },
+    });
+
+    if (materialsToCreate.length > 0) {
+      await tx.saleMaterial.createMany({
+        data: materialsToCreate.map((m) => ({
           saleId: sessionId,
-          serviceId: item.serviceId,
-          qty: item.qty,
-          price: item.price,
-        },
-      }),
-      // Add materials if provided
-      item.materials && item.materials.length > 0
-        ? tx.saleMaterial.createMany({
-            data: item.materials.map((m) => ({
-              saleId: sessionId,
-              materialId: m.materialId,
-              quantity: m.quantity,
-            })),
-          })
-        : Promise.resolve(),
-    ]);
+          materialId: m.materialId,
+          quantity: m.quantity,
+        })),
+      });
+    }
 
     // Recalculate totals efficiently
     const [services, addOns] = await Promise.all([
@@ -197,7 +228,7 @@ export async function addItemToSession(
       where: { id: sessionId },
       include: sessionInclude,
     });
-  });
+  }, interactiveTxOptions);
 }
 
 // REMOVE item from session - Optimized
@@ -272,7 +303,7 @@ export async function removeItemFromSession(sessionId: string, itemId: string) {
       where: { id: sessionId },
       include: sessionInclude,
     });
-  });
+  }, interactiveTxOptions);
 }
 
 // UPDATE material quantity in session - Optimized
@@ -313,7 +344,7 @@ export async function updateSessionMaterial(
       where: { id: sessionId },
       include: sessionInclude,
     });
-  });
+  }, interactiveTxOptions);
 }
 
 // CHECKOUT session (finalize) - Optimized with transaction and batch updates
@@ -348,45 +379,27 @@ export async function checkoutSession(id: string, cashReceived?: number) {
     // Calculate change if cash received is provided
     const changeGiven = cashReceived !== undefined ? cashReceived - total : null;
 
-    // Batch material updates - much faster than individual updates
-    if (session.saleMaterials.length > 0) {
-      // Group materials by ID to handle duplicates
-      const materialUpdates = new Map<string, number>();
-      const movements: Array<{
-        materialId: string;
-        quantity: number;
-        type: string;
-        referenceId: string;
-      }> = [];
-
-      for (const saleMaterial of session.saleMaterials) {
-        const current = materialUpdates.get(saleMaterial.materialId) || 0;
-        materialUpdates.set(saleMaterial.materialId, current + saleMaterial.quantity);
-        movements.push({
-          materialId: saleMaterial.materialId,
-          quantity: saleMaterial.quantity,
-          type: "OUT",
-          referenceId: session.id,
-        });
-      }
-
-      // Batch update materials
-      await Promise.all(
-        Array.from(materialUpdates.entries()).map(([materialId, totalQuantity]) =>
-          tx.material.update({
-            where: { id: materialId },
-            data: { stock: { decrement: totalQuantity } },
-          })
-        )
+    let materialsToDeduct = session.saleMaterials.map((m) => ({
+      materialId: m.materialId,
+      quantity: m.quantity,
+    }));
+    if (materialsToDeduct.length === 0 && session.saleServices.length > 0) {
+      materialsToDeduct = await resolveMaterialsFromServiceRecipes(
+        tx,
+        session.saleServices.map((ss) => ({ serviceId: ss.serviceId, qty: ss.qty }))
       );
-
-      // Batch create inventory movements
-      if (movements.length > 0) {
-        await tx.inventoryMovement.createMany({
-          data: movements,
+      if (materialsToDeduct.length > 0) {
+        await tx.saleMaterial.createMany({
+          data: materialsToDeduct.map((m) => ({
+            saleId: session.id,
+            materialId: m.materialId,
+            quantity: m.quantity,
+          })),
         });
       }
     }
+
+    await deductMaterialsForSaleCompletion(tx, session.id, materialsToDeduct);
 
     // Update sale status and return with full includes
     return tx.sale.update({
@@ -402,7 +415,7 @@ export async function checkoutSession(id: string, cashReceived?: number) {
       },
       include: sessionInclude,
     });
-  });
+  }, interactiveTxOptions);
 }
 
 // CANCEL session

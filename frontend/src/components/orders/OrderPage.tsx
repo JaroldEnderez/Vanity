@@ -8,6 +8,7 @@ import ServicesSection from "./services/ServicesSection";
 import SalePanel from "./sale/SalePanel";
 import Drawer from "@/src/components/ui/Drawer";
 import { Loader2, Pencil, Check, X, AlertCircle } from "lucide-react";
+import { formatPHP } from "@/src/app/lib/money";
 
 type Props = {
   services: Service[];
@@ -98,7 +99,7 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
       <p className="text-xs md:text-sm text-slate-500">
         <span className="font-mono text-[10px] md:text-xs text-slate-400">#{draft.id.slice(0, 8)}</span>
         {" • "}
-        {serviceCount} {serviceLabel} • ₱{draft.total.toFixed(2)}
+        {serviceCount} {serviceLabel} • {formatPHP(draft.total)}
       </p>
     </div>
   );
@@ -173,8 +174,17 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
   return (
     <div className="h-full flex flex-col md:flex-row">
       {/* Session List - Main Content */}
-      <div className="flex-1 bg-white min-w-0">
-        <SessionList staffId={defaultStaffId} />
+      <div className="flex-1 bg-white min-w-0 flex flex-col min-h-0">
+        {!defaultStaffId?.trim() && (
+          <div className="px-4 md:px-6 py-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-sm">
+            <strong className="font-semibold">No staff on file for this branch.</strong> Sessions need a
+            default staff member. Add staff in the owner dashboard (or seed your database), then refresh
+            this page.
+          </div>
+        )}
+        <div className="flex-1 min-h-0">
+          <SessionList staffId={defaultStaffId} />
+        </div>
       </div>
 
       {/* Session Drawer */}

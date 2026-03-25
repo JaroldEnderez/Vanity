@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { useToastStore } from "./toastStore";
+import { WALK_IN_CUSTOMER_ID, WALK_IN_CUSTOMER_NAME } from "@/src/app/lib/walkInCustomer";
 
 // Material used in a draft sale item
 export type DraftMaterial = {
@@ -6,6 +8,15 @@ export type DraftMaterial = {
   name: string;
   unit: string;
   quantity: number;
+};
+
+// Hair Coloring extra details (only for services in Hair_coloring category)
+export type ColoringDetails = {
+  serviceDisplayName?: string;
+  colorUsed?: string;
+  developer?: string;
+  itemStaffName?: string;
+  remarks?: string;
 };
 
 // Draft sale item (temporary, in-memory only)
@@ -17,6 +28,7 @@ export type DraftSaleItem = {
   qty: number;
   durationMin?: number;
   materials?: DraftMaterial[];
+  coloringDetails?: ColoringDetails;
 };
 
 // Status colors:
@@ -31,6 +43,9 @@ export type DraftSale = {
   branchId: string;
   staffId: string;
   staffName?: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string | null;
   name?: string;
   status: DraftStatus;
   isPaid: boolean;
@@ -39,6 +54,18 @@ export type DraftSale = {
   total: number;
   createdAt: string;
 };
+
+/** POST /api/sessions returns a Prisma sale; NextAuth uses `{ user, expires }` — reject the latter. */
+function isApiSalePayload(data: unknown): data is { id: string; branchId: string } {
+  if (typeof data !== "object" || data === null) return false;
+  const o = data as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.branchId === "string" &&
+    o.user === undefined &&
+    o.expires === undefined
+  );
+}
 
 type SaleStore = {
   draftSales: DraftSale[];
@@ -65,6 +92,10 @@ type SaleStore = {
   setActiveDraft: (draftId: string | null) => void;
   updateDraftName: (draftId: string, name: string) => void;
   updateDraftStaff: (draftId: string, staffId: string, staffName: string) => void;
+  updateDraftCustomer: (
+    draftId: string,
+    customer: { id: string; name: string; phone?: string | null } | null
+  ) => void;
   removeDraft: (draftId: string) => void;
   clearAllDrafts: () => void;
 
@@ -78,6 +109,7 @@ type SaleStore = {
       qty: number;
       durationMin?: number;
       materials?: DraftMaterial[];
+      coloringDetails?: ColoringDetails;
     }
   ) => void;
   removeItemFromDraft: (draftId: string, itemId: string) => void;
@@ -99,14 +131,26 @@ function dbSessionToDraft(session: any): DraftSale {
   // Map items first
   const items = (session.saleServices || []).map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (ss: any): DraftSaleItem => ({
-      id: ss.id,
-      serviceId: ss.serviceId,
-      name: ss.service?.name || "Unknown Service",
-      price: ss.price,
-      qty: ss.qty,
-      durationMin: ss.service?.durationMin || undefined,
-      materials: (ss.service?.materials || []).map(
+    (ss: any): DraftSaleItem => {
+      const displayName = ss.serviceDisplayName || ss.service?.name || "Unknown Service";
+      const coloringDetails: ColoringDetails | undefined =
+        ss.serviceDisplayName || ss.colorUsed || ss.developer || ss.itemStaffName || ss.remarks
+          ? {
+              serviceDisplayName: ss.serviceDisplayName || undefined,
+              colorUsed: ss.colorUsed || undefined,
+              developer: ss.developer || undefined,
+              itemStaffName: ss.itemStaffName || undefined,
+              remarks: ss.remarks || undefined,
+            }
+          : undefined;
+      return {
+        id: ss.id,
+        serviceId: ss.serviceId,
+        name: displayName,
+        price: ss.price,
+        qty: ss.qty,
+        durationMin: ss.service?.durationMin || undefined,
+        materials: (ss.service?.materials || []).map(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sm: any): DraftMaterial => {
           // Find actual quantity from saleMaterials if exists
@@ -122,17 +166,27 @@ function dbSessionToDraft(session: any): DraftSale {
           };
         }
       ),
-    })
+        coloringDetails,
+      };
+    }
   );
 
   // Calculate totals from items (don't trust DB values which may be stale)
   const subtotal = items.reduce((sum: number, item: DraftSaleItem) => sum + item.price * item.qty, 0);
 
+  const resolvedCustomerId = session.customer?.id ?? session.customerId ?? null;
+  const useWalkIn = !resolvedCustomerId;
   return {
     id: session.id,
     branchId: session.branchId,
     staffId: session.staffId,
     staffName: session.staff?.name || undefined,
+    customerId: useWalkIn ? WALK_IN_CUSTOMER_ID : resolvedCustomerId,
+    customerName: useWalkIn
+      ? WALK_IN_CUSTOMER_NAME
+      : session.customer?.name ??
+        (resolvedCustomerId === WALK_IN_CUSTOMER_ID ? WALK_IN_CUSTOMER_NAME : "Customer"),
+    customerPhone: useWalkIn ? null : session.customer?.phone ?? null,
     name: session.name || undefined,
     status: "active",
     isPaid: false,
@@ -156,10 +210,9 @@ function generateTempId(): string {
 
 // ============================================
 // DEBOUNCED SAVE MECHANISM
-// Save 3 seconds after last change
-// Reset timer on every change
+// Save 1.5s after last change for snappier sync (reset on every change)
 // ============================================
-const SAVE_DELAY = 3000;
+const SAVE_DELAY = 1500;
 const saveTimers: Map<string, NodeJS.Timeout> = new Map();
 const pendingOperations: Map<string, Array<() => Promise<void>>> = new Map();
 
@@ -175,7 +228,7 @@ function queueSave(draftId: string, operation: () => Promise<void>) {
     clearTimeout(existingTimer);
   }
 
-  // Set new timer - save after 3 seconds of inactivity
+  // Set new timer - save after SAVE_DELAY ms of inactivity
   const timer = setTimeout(async () => {
     const operations = pendingOperations.get(draftId) || [];
     pendingOperations.delete(draftId);
@@ -224,18 +277,28 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
   pendingCreationStaffId: null,
 
   startSessionCreation: (staffId: string) => {
+    if (!staffId?.trim()) {
+      useToastStore.getState().show(
+        "No staff for this branch. Add a staff member (owner dashboard) and reload this page."
+      );
+      return;
+    }
     set({ pendingSessionCreation: true, pendingCreationStaffId: staffId });
   },
 
   confirmSessionCreation: async () => {
     const { pendingCreationStaffId, createDraft } = get();
-    if (!pendingCreationStaffId) return;
-    set({ isLoading: true });
-    try {
-      await createDraft(pendingCreationStaffId);
+    // Only treat null/undefined as "not started" — "" means branch has no staff (must not use !value)
+    if (pendingCreationStaffId === null || pendingCreationStaffId === undefined) return;
+    if (pendingCreationStaffId === "") {
+      useToastStore.getState().show(
+        "No staff for this branch. Add a staff member, then try again."
+      );
+      return;
+    }
+    const draft = await createDraft(pendingCreationStaffId);
+    if (draft) {
       set({ pendingSessionCreation: false, pendingCreationStaffId: null });
-    } finally {
-      set({ isLoading: false, pendingSessionCreation: false, pendingCreationStaffId: null });
     }
   },
 
@@ -286,10 +349,30 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         body: JSON.stringify({ staffId, name: defaultName }),
       });
 
-      if (!res.ok) throw new Error("Failed to create session");
+      const data: unknown = await res.json().catch(() => null);
 
-      const session = await res.json();
-      const draft = dbSessionToDraft(session);
+      if (!res.ok) {
+        const msg =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : `Could not create session (${res.status})`;
+        useToastStore.getState().show(msg);
+        console.error("POST /api/sessions failed:", res.status, data);
+        return null;
+      }
+
+      if (!isApiSalePayload(data)) {
+        useToastStore.getState().show(
+          "Invalid response from server. In DevTools Network, open the POST /api/sessions request (not /api/auth/session)."
+        );
+        console.error("POST /api/sessions returned unexpected JSON:", data);
+        return null;
+      }
+
+      const draft = dbSessionToDraft(data);
 
       set((state) => ({
         draftSales: [...state.draftSales, draft],
@@ -299,6 +382,7 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
       return draft;
     } catch (error) {
       console.error("Failed to create draft:", error);
+      useToastStore.getState().show("Failed to create session. Check the console.");
       return null;
     } finally {
       set({ isLoading: false });
@@ -355,6 +439,41 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
     });
   },
 
+  // Optimistic + debounced
+  updateDraftCustomer: (draftId, customer) => {
+    const effective =
+      customer ??
+      ({
+        id: WALK_IN_CUSTOMER_ID,
+        name: WALK_IN_CUSTOMER_NAME,
+        phone: null as string | null,
+      });
+
+    // Immediate UI update
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = {
+        ...updatedDrafts[draftIndex],
+        customerId: effective.id,
+        customerName: effective.name,
+        customerPhone: effective.phone ?? null,
+      };
+      return { draftSales: updatedDrafts };
+    });
+
+    // Queue debounced save
+    queueSave(draftId, async () => {
+      await fetch(`/api/sessions/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: effective.id }),
+      });
+    });
+  },
+
   // Optimistic + immediate (deletes are critical)
   removeDraft: (draftId) => {
     // Immediate UI update
@@ -395,6 +514,7 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         qty: item.qty,
         durationMin: item.durationMin,
         materials: item.materials,
+        coloringDetails: item.coloringDetails,
       };
 
       const updatedDraft = recalculateTotals({
@@ -420,6 +540,11 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
             materialId: m.materialId,
             quantity: m.quantity,
           })),
+          serviceDisplayName: item.coloringDetails?.serviceDisplayName,
+          colorUsed: item.coloringDetails?.colorUsed,
+          developer: item.coloringDetails?.developer,
+          itemStaffName: item.coloringDetails?.itemStaffName,
+          remarks: item.coloringDetails?.remarks,
         }),
       });
 
