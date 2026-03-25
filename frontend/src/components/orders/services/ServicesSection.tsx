@@ -1,10 +1,11 @@
 "use client";
 
-import { Service, ServiceCategory, SERVICE_CATEGORIES } from "@/src/app/types/service";
+import { Service, isHairColoringCategory, labelServiceCategory } from "@/src/app/types/service";
 import ServiceGrid from "./ServiceGrid";
 import HairColoringModal from "./HairColoringModal";
 import { useSaleStore, DraftMaterial, ColoringDetails } from "@/src/app/store/saleStore";
 import { useState, useCallback, useMemo } from "react";
+import { Search } from "lucide-react";
 
 type Props = {
   services: Service[];
@@ -36,33 +37,6 @@ async function fetchServiceMaterials(serviceId: string): Promise<DraftMaterial[]
   return promise;
 }
 
-const CATEGORY_LABELS: Record<ServiceCategory, string> = {
-  Haircut: "Haircut",
-  Hair_Coloring: "Hair Coloring",
-  Treatment: "Treatment",
-  Rebond: "Rebond",
-  Perm: "Perm",
-  Styling: "Styling",
-  Nails: "Nails",
-  Others: "Others",
-};
-
-function groupByCategory(services: Service[]): Map<ServiceCategory, Service[]> {
-  const order = [...SERVICE_CATEGORIES];
-  const map = new Map<ServiceCategory, Service[]>();
-  for (const s of services) {
-    const cat = (s.category || "Others") as ServiceCategory;
-    if (!map.has(cat)) map.set(cat, []);
-    map.get(cat)!.push(s);
-  }
-  // Sort categories by defined order
-  const sorted = new Map<ServiceCategory, Service[]>();
-  for (const cat of order) {
-    if (map.has(cat)) sorted.set(cat, map.get(cat)!);
-  }
-  return sorted;
-}
-
 export default function ServicesSection({ services, staffId }: Props) {
   const getActiveDraft = useSaleStore((state) => state.getActiveDraft);
   const createDraft = useSaleStore((state) => state.createDraft);
@@ -71,8 +45,23 @@ export default function ServicesSection({ services, staffId }: Props) {
 
   const [isCreating, setIsCreating] = useState(false);
   const [hairColoringService, setHairColoringService] = useState<Service | null>(null);
+  const [serviceSearch, setServiceSearch] = useState("");
 
-  const grouped = useMemo(() => groupByCategory(services), [services]);
+  const orderedServices = useMemo(
+    () => [...services].sort((a, b) => a.name.localeCompare(b.name)),
+    [services]
+  );
+
+  const filteredServices = useMemo(() => {
+    const q = serviceSearch.trim().toLowerCase();
+    if (!q) return orderedServices;
+    return orderedServices.filter((s) => {
+      if (s.name.toLowerCase().includes(q)) return true;
+      if (s.description?.toLowerCase().includes(q)) return true;
+      if (labelServiceCategory(s.category).toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [orderedServices, serviceSearch]);
 
   const prefetchMaterials = useCallback((serviceId: string) => {
     fetchServiceMaterials(serviceId);
@@ -122,9 +111,8 @@ export default function ServicesSection({ services, staffId }: Props) {
 
   const handleSelectService = async (service: Service) => {
     const materials = await fetchServiceMaterials(service.id);
-    const category = (service.category || "Others") as ServiceCategory;
 
-    if (category === "Hair_Coloring") {
+    if (isHairColoringCategory(service.category)) {
       setHairColoringService(service);
       return;
     }
@@ -141,23 +129,38 @@ export default function ServicesSection({ services, staffId }: Props) {
 
   return (
     <div className="h-full">
-      <h2 className="mb-3 md:mb-4 text-lg md:text-xl font-semibold">Services</h2>
-
-      <div className="space-y-10">
-        {Array.from(grouped.entries()).map(([category, categoryServices]) => (
-          <div key={category} className="pt-2 first:pt-0">
-            <h3 className="text-sm font-medium text-slate-600 mb-3">
-              {CATEGORY_LABELS[category]}
-            </h3>
-            <ServiceGrid
-              services={categoryServices}
-              onSelectService={handleSelectService}
-              onHoverService={prefetchMaterials}
-              selectedServiceId={hairColoringService?.id}
-            />
-          </div>
-        ))}
+      <div className="mb-3 md:mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg md:text-xl font-semibold">Services</h2>
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={serviceSearch}
+            onChange={(e) => setServiceSearch(e.target.value)}
+            placeholder="Filter services…"
+            autoComplete="off"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          />
+        </div>
       </div>
+
+      {filteredServices.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+          {serviceSearch.trim()
+            ? "No services match your search."
+            : "No services available."}
+        </div>
+      ) : (
+        <ServiceGrid
+          services={filteredServices}
+          onSelectService={handleSelectService}
+          onHoverService={prefetchMaterials}
+          selectedServiceId={hairColoringService?.id}
+        />
+      )}
 
       {hairColoringService && (
         <HairColoringModal

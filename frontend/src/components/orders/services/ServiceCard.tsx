@@ -1,6 +1,6 @@
 "use client";
 
-import { Service } from "@/src/app/types/service";
+import { Service, labelServiceCategory } from "@/src/app/types/service";
 import { useSaleStore } from "@/src/app/store/saleStore";
 import { formatPHP } from "@/src/app/lib/money";
 
@@ -33,6 +33,9 @@ export default function ServiceCard({ service, onSelect, onHover, isHighlighted 
     >
       <div>
         <h3 className="font-medium text-slate-900">{service.name}</h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {labelServiceCategory(service.category)}
+        </p>
 
         {service.durationMin && (
           <p className="mt-1 text-xs text-slate-500">

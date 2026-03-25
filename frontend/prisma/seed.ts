@@ -253,18 +253,18 @@ async function main(){
     console.log("Seeding services...")
 
     const services = [
-        { name: "Haircut", category: "Haircut" as const, price: 250, durationMin: 30 },
-        { name: "Hair Coloring", category: "Hair_Coloring" as const, price: 1500, durationMin: 120 },
-        { name: "Full Hair Color", category: "Hair_Coloring" as const, price: 1800, durationMin: 150 },
-        { name: "Balayage", category: "Hair_Coloring" as const, price: 2500, durationMin: 180 },
-        { name: "Hair Spa", category: "Treatment" as const, price: 800, durationMin: 90 },
-        { name: "Keratin Treatment", category: "Treatment" as const, price: 3500, durationMin: 120 },
-        { name: "Rebond", category: "Rebond" as const, price: 4000, durationMin: 240 },
-        { name: "Perm", category: "Perm" as const, price: 1200, durationMin: 90 },
-        { name: "Blow Dry & Styling", category: "Styling" as const, price: 400, durationMin: 45 },
-        { name: "Manicure", category: "Nails" as const, price: 300, durationMin: 45 },
-        { name: "Pedicure", category: "Nails" as const, price: 350, durationMin: 60 },
-        { name: "Gel Nails", category: "Nails" as const, price: 600, durationMin: 60 },
+        { name: "Haircut", category: "default" as const, price: 250, durationMin: 30 },
+        { name: "Hair Coloring", category: "Hair_coloring" as const, price: 1500, durationMin: 120 },
+        { name: "Full Hair Color", category: "Hair_coloring" as const, price: 1800, durationMin: 150 },
+        { name: "Balayage", category: "Hair_coloring" as const, price: 2500, durationMin: 180 },
+        { name: "Hair Spa", category: "default" as const, price: 800, durationMin: 90 },
+        { name: "Keratin Treatment", category: "default" as const, price: 3500, durationMin: 120 },
+        { name: "Rebond", category: "default" as const, price: 4000, durationMin: 240 },
+        { name: "Perm", category: "default" as const, price: 1200, durationMin: 90 },
+        { name: "Blow Dry & Styling", category: "default" as const, price: 400, durationMin: 45 },
+        { name: "Manicure", category: "default" as const, price: 300, durationMin: 45 },
+        { name: "Pedicure", category: "default" as const, price: 350, durationMin: 60 },
+        { name: "Gel Nails", category: "default" as const, price: 600, durationMin: 60 },
     ];
 
     for (const service of services) {

@@ -174,7 +174,8 @@ export default function MaterialsManager({ initialMaterials }: Props) {
 
       {/* Materials Table */}
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[680px]">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">
@@ -415,6 +416,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
     </div>

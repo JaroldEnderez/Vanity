@@ -56,7 +56,7 @@ model Staff {
 model Service {
   id            String            @id @default(uuid())
   name          String            @unique
-  category      ServiceCategory   @default(Others)
+  category      String            @default("default")
   description   String?
   durationMin   Int?
   price         Float
@@ -163,7 +163,7 @@ model SaleService {
   qty       Int      @default(1)
   price     Float    // unit price at time of sale
 
-  // Hair Coloring extra fields (only used when service category is Hair_Coloring)
+  // Hair Coloring extra fields (only used when service category is Hair_coloring)
   serviceDisplayName String?  // e.g. "Full Hair Color"
   colorUsed          String?
   developer          String?  // e.g. "30 Volume"
@@ -217,17 +217,6 @@ model InventoryMovement {
   referenceId String?
   createdAt   DateTime @default(now())
   material    Material @relation(fields: [materialId], references: [id])
-}
-
-enum ServiceCategory {
-  Haircut
-  Hair_Coloring
-  Treatment
-  Rebond
-  Perm
-  Styling
-  Nails
-  Others
 }
 
 enum SaleStatus {

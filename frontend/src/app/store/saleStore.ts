@@ -10,7 +10,7 @@ export type DraftMaterial = {
   quantity: number;
 };
 
-// Hair Coloring extra details (only for services in Hair_Coloring category)
+// Hair Coloring extra details (only for services in Hair_coloring category)
 export type ColoringDetails = {
   serviceDisplayName?: string;
   colorUsed?: string;

@@ -1,4 +1,10 @@
 import { db } from "./db";
+import { DEFAULT_SERVICE_CATEGORY, HAIR_COLORING_CATEGORY } from "@/src/app/types/service";
+
+function normalizeServiceCategory(category: string | undefined | null): string {
+  if (category === HAIR_COLORING_CATEGORY || category === "Hair_Coloring") return HAIR_COLORING_CATEGORY;
+  return DEFAULT_SERVICE_CATEGORY;
+}
 
 export async function getAllServices() {
   return db.service.findMany({
@@ -24,7 +30,7 @@ export async function getServices(branchId?: string) {
         ],
       } : {}),
     },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
+    orderBy: { name: "asc" },
     select: {
       id: true,
       name: true,
@@ -53,7 +59,7 @@ export async function getServicesForBranch(branchId: string) {
       isActive: true,
       OR: [{ branchId }, { branchId: null }],
     },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
+    orderBy: { name: "asc" },
     include: {
       materials: {
         include: { material: true },
@@ -70,14 +76,19 @@ export async function getServiceById(id: string) {
 
 export async function createService(data: {
   name: string;
+  category?: string;
   description?: string;
   durationMin: number;
   price: number;
   branchId?: string;
   isActive?: boolean;
 }) {
+  const { category, ...rest } = data;
   return db.service.create({
-    data,
+    data: {
+      ...rest,
+      category: normalizeServiceCategory(category),
+    },
   });
 }
 
@@ -85,6 +96,7 @@ export async function updateService(
   id: string,
   data: Partial<{
     name: string;
+    category: string;
     description: string;
     durationMin: number;
     price: number;
@@ -92,9 +104,13 @@ export async function updateService(
     isActive: boolean;
   }>
 ) {
+  const next = { ...data };
+  if (data.category !== undefined) {
+    next.category = normalizeServiceCategory(data.category);
+  }
   return db.service.update({
     where: { id },
-    data,
+    data: next,
   });
 }
 

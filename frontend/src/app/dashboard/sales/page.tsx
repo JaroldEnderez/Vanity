@@ -5,7 +5,7 @@ import SalesChartLoader from "@/src/components/charts/SalesChartLoader";
 import SalesHistoryList from "@/src/components/sales/SalesHistoryList";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-type QuickFilter = "last7" | "last30" | "thisMonth";
+type QuickFilter = "today" | "last7" | "last30" | "thisYear" | "allTime" | "custom";
 
 type Sale = {
   id: string;
@@ -41,14 +41,22 @@ function getDateRangeForQuickFilter(filter: QuickFilter): { start: Date; end: Da
   start.setHours(0, 0, 0, 0);
 
   switch (filter) {
+    case "today":
+      break;
     case "last7":
       start.setDate(start.getDate() - 6);
       break;
     case "last30":
       start.setDate(start.getDate() - 29);
       break;
-    case "thisMonth":
-      start.setDate(1);
+    case "thisYear":
+      start.setMonth(0, 1);
+      break;
+    case "allTime":
+      start.setTime(0);
+      end.setHours(23, 59, 59, 999);
+      break;
+    case "custom":
       break;
   }
 
@@ -67,8 +75,24 @@ export default function SalesHistoryPage() {
   const [chartOpen, setChartOpen] = useState(true);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
-  const dateRange = useMemo(() => getDateRangeForQuickFilter(quickFilter), [quickFilter]);
+  const dateRange = useMemo(() => {
+    if (quickFilter !== "custom") return getDateRangeForQuickFilter(quickFilter);
+
+    const fallback = getDateRangeForQuickFilter("last7");
+    if (!customStart || !customEnd) return fallback;
+
+    const start = new Date(`${customStart}T00:00:00`);
+    const end = new Date(`${customEnd}T23:59:59.999`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+      return fallback;
+    }
+
+    return { start, end };
+  }, [quickFilter, customStart, customEnd]);
 
   const loadSales = useCallback(async (start: Date, end: Date) => {
     setLoading(true);
@@ -103,9 +127,12 @@ export default function SalesHistoryPage() {
       <div className="flex flex-wrap gap-2" role="group" aria-label="Date range">
         {(
           [
+            { id: "today" as const, label: "Today" },
             { id: "last7" as const, label: "Last 7 days" },
             { id: "last30" as const, label: "Last 30 days" },
-            { id: "thisMonth" as const, label: "This month" },
+            { id: "thisYear" as const, label: "This Year" },
+            { id: "allTime" as const, label: "All Time" },
+            { id: "custom" as const, label: "Custom Range" },
           ] as const
         ).map(({ id, label }) => (
           <button
@@ -122,6 +149,28 @@ export default function SalesHistoryPage() {
           </button>
         ))}
       </div>
+      {quickFilter === "custom" && (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm text-slate-600">
+            <span className="block mb-1">Start</span>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </label>
+          <label className="text-sm text-slate-600">
+            <span className="block mb-1">End</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+      )}
 
       <section className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <button

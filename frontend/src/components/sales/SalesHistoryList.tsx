@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle, ChevronDown, ChevronRight } from "lucide-react";
 
 import { formatPHP } from "@/src/app/lib/money";
@@ -259,8 +259,24 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
 }
 
 export default function SalesHistoryList({ sales, emptyMessage = "No sales found" }: Props) {
+  const pageSize = 12;
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Calculate total
   const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalPages = Math.max(1, Math.ceil(sales.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const pagedSales = sales.slice(startIndex, startIndex + pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sales]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   if (sales.length === 0) {
     return (
@@ -291,10 +307,38 @@ export default function SalesHistoryList({ sales, emptyMessage = "No sales found
 
       {/* Sales List */}
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-        {sales.map((sale, index) => (
-          <SaleHistoryItem key={sale.id} sale={sale} index={index} />
+        {pagedSales.map((sale, index) => (
+          <SaleHistoryItem key={sale.id} sale={sale} index={startIndex + index} />
         ))}
       </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white rounded-lg border border-slate-200 px-4 py-3">
+          <p className="text-sm text-slate-500">
+            Showing {startIndex + 1}-{Math.min(startIndex + pageSize, sales.length)} of {sales.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-md text-sm border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-slate-600">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 rounded-md text-sm border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
