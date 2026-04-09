@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import type { PackageMeasure } from "@prisma/client";
 import { useToastStore } from "./toastStore";
 import { WALK_IN_CUSTOMER_ID, WALK_IN_CUSTOMER_NAME } from "@/src/app/lib/walkInCustomer";
+import { minSaleMaterialQuantity } from "@/src/app/lib/materialPackage";
 
 // Material used in a draft sale item
 export type DraftMaterial = {
@@ -8,6 +10,8 @@ export type DraftMaterial = {
   name: string;
   unit: string;
   quantity: number;
+  packageAmount?: number | null;
+  packageMeasure?: PackageMeasure | null;
 };
 
 // Hair Coloring extra details (only for services in Hair_coloring category)
@@ -163,6 +167,8 @@ function dbSessionToDraft(session: any): DraftSale {
             name: sm.material?.name || "Unknown Material",
             unit: sm.material?.unit || "pcs",
             quantity: saleMaterial?.quantity || sm.quantity,
+            packageAmount: sm.material?.packageAmount ?? null,
+            packageMeasure: sm.material?.packageMeasure ?? null,
           };
         }
       ),
@@ -599,9 +605,11 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
       const draft = state.draftSales[draftIndex];
       const updatedItems = draft.items.map((item) => ({
         ...item,
-        materials: item.materials?.map((m) =>
-          m.materialId === materialId ? { ...m, quantity: Math.max(1, quantity) } : m
-        ),
+        materials: item.materials?.map((m) => {
+          if (m.materialId !== materialId) return m;
+          const min = minSaleMaterialQuantity(m);
+          return { ...m, quantity: Math.max(min, quantity) };
+        }),
       }));
 
       const updatedDrafts = [...state.draftSales];

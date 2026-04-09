@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import type { PackageMeasure } from "@prisma/client";
 import { Plus, Pencil, Trash2, X, Check, Clock, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
+import {
+  formatMeasureAbbrev,
+  hasPackageMaterial,
+  packageQuantityStep,
+} from "@/src/app/lib/materialPackage";
 import {
   DEFAULT_SERVICE_CATEGORY,
   SERVICE_CATEGORIES,
@@ -14,6 +20,8 @@ type Material = {
   name: string;
   unit: string;
   stock: number;
+  packageAmount: number | null;
+  packageMeasure: PackageMeasure | null;
 };
 
 type ServiceMaterial = {
@@ -221,30 +229,38 @@ export default function ServicesManager({ initialServices, initialMaterials = []
       (m) => !serviceMaterials.some((sm) => sm.materialId === m.id)
     );
     if (availableMaterial) {
+      const defaultQty =
+        hasPackageMaterial(availableMaterial)
+          ? Math.min(100, availableMaterial.packageAmount ?? 100)
+          : 1;
       setServiceMaterials([
         ...serviceMaterials,
-        { materialId: availableMaterial.id, quantity: 1 },
+        { materialId: availableMaterial.id, quantity: defaultQty },
       ]);
     }
   };
 
-  const updateMaterialQuantity = (materialId: string, delta: number) => {
+  const updateMaterialQuantity = (materialId: string, direction: 1 | -1) => {
     setServiceMaterials(
-      serviceMaterials.map((sm) =>
-        sm.materialId === materialId
-          ? { ...sm, quantity: Math.max(1, sm.quantity + delta) }
-          : sm
-      )
+      serviceMaterials.map((sm) => {
+        if (sm.materialId !== materialId) return sm;
+        const m = materials.find((x) => x.id === materialId);
+        const min = m && hasPackageMaterial(m) ? 0.01 : 1;
+        const step = m && hasPackageMaterial(m) ? packageQuantityStep(m.packageMeasure!) : 1;
+        const next = sm.quantity + direction * step;
+        return { ...sm, quantity: Math.max(min, next) };
+      })
     );
   };
 
   const setMaterialQuantity = (materialId: string, quantity: number) => {
     setServiceMaterials(
-      serviceMaterials.map((sm) =>
-        sm.materialId === materialId
-          ? { ...sm, quantity: Math.max(1, quantity) }
-          : sm
-      )
+      serviceMaterials.map((sm) => {
+        if (sm.materialId !== materialId) return sm;
+        const m = materials.find((x) => x.id === materialId);
+        const min = m && hasPackageMaterial(m) ? 0.01 : 1;
+        return { ...sm, quantity: Math.max(min, quantity) };
+      })
     );
   };
 
@@ -645,7 +661,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                 Materials for {services.find((s) => s.id === materialsModalServiceId)?.name}
               </h3>
               <p className="text-sm text-slate-500 mt-1">
-                Set default materials and quantities used per service
+                Set default materials and quantities per service (count, or ml/g when package size is set on the material)
               </p>
             </div>
 
@@ -658,6 +674,8 @@ export default function ServicesManager({ initialServices, initialMaterials = []
               ) : (
                 serviceMaterials.map((sm) => {
                   const material = materials.find((m) => m.id === sm.materialId);
+                  const recipeMin =
+                    material && hasPackageMaterial(material) ? 0.01 : 1;
                   return (
                     <div
                       key={sm.materialId}
@@ -685,20 +703,30 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                       {/* Quantity Controls */}
                       <div className="flex items-center border border-slate-300 rounded-md">
                         <button
+                          type="button"
                           onClick={() => updateMaterialQuantity(sm.materialId, -1)}
                           className="p-1.5 hover:bg-slate-100 transition"
+                          disabled={sm.quantity <= recipeMin}
                         >
                           <ChevronDown size={16} className="text-slate-600" />
                         </button>
                         <input
                           type="number"
                           value={sm.quantity}
-                          onChange={(e) => setMaterialQuantity(sm.materialId, parseFloat(e.target.value) || 1)}
-                          step="1"
-                          min="1"
-                          className="w-14 text-center text-sm border-x border-slate-300 py-1.5 focus:outline-none"
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            const min = material && hasPackageMaterial(material) ? 0.01 : 1;
+                            setMaterialQuantity(
+                              sm.materialId,
+                              Number.isFinite(v) && v > 0 ? v : min
+                            );
+                          }}
+                          step={material && hasPackageMaterial(material) ? "0.1" : "1"}
+                          min={material && hasPackageMaterial(material) ? "0.01" : "1"}
+                          className="w-16 text-center text-sm border-x border-slate-300 py-1.5 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <button
+                          type="button"
                           onClick={() => updateMaterialQuantity(sm.materialId, 1)}
                           className="p-1.5 hover:bg-slate-100 transition"
                         >
@@ -706,8 +734,12 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                         </button>
                       </div>
 
-                      {/* Unit Label */}
-                      <span className="text-sm text-slate-500 w-10">{material?.unit}</span>
+                      {/* Unit / measure label */}
+                      <span className="text-sm text-slate-500 w-12 shrink-0">
+                        {material && hasPackageMaterial(material)
+                          ? formatMeasureAbbrev(material.packageMeasure!)
+                          : material?.unit}
+                      </span>
 
                       {/* Remove Button */}
                       <button

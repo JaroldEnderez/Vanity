@@ -42,7 +42,13 @@ const sessionInclude = {
   saleMaterials: {
     include: {
       material: {
-        select: { id: true, name: true, unit: true }, // Don't need full material data
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          packageAmount: true,
+          packageMeasure: true,
+        },
       },
     },
   },

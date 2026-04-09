@@ -24,7 +24,11 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to create material";
-    const status = message.includes("Unauthorized") ? 401 : 500;
+    const status = message.includes("Unauthorized")
+      ? 401
+      : message.includes("Package") || message.includes("package")
+        ? 400
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

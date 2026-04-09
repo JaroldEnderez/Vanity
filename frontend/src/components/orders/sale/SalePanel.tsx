@@ -7,6 +7,12 @@ import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
 import StartSaleButton from "./StartSaleButton";
 import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X, User, UserPlus } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
+import {
+  draftMaterialUsesPackage,
+  formatMeasureAbbrev,
+  minSaleMaterialQuantity,
+  packageQuantityStep,
+} from "@/src/app/lib/materialPackage";
 
 // Staff type for dropdown
 type Staff = {
@@ -480,29 +486,51 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                           <span>Materials</span>
                         </div>
                         <div className="space-y-1.5">
-                          {item.materials.map((material) => (
-                            <div key={material.materialId} className="flex items-center justify-between text-sm">
-                              <span className="text-slate-700">{material.name}</span>
-                              <div className="flex items-center gap-1">
+                          {item.materials.map((material) => {
+                            const minQ = minSaleMaterialQuantity(material);
+                            const pkg = draftMaterialUsesPackage(material);
+                            const step = pkg ? packageQuantityStep(material.packageMeasure) : 1;
+                            const unitLabel = pkg
+                              ? formatMeasureAbbrev(material.packageMeasure!)
+                              : material.unit;
+                            return (
+                            <div key={material.materialId} className="flex items-center justify-between text-sm gap-2">
+                              <span className="text-slate-700 truncate">{material.name}</span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
                                 {!activeDraft.isPaid && (
                                   <>
                                     <button
-                                      onClick={() => handleMaterialChange(material.materialId, material.quantity - 1)}
+                                      type="button"
+                                      onClick={() =>
+                                        handleMaterialChange(
+                                          material.materialId,
+                                          Math.max(minQ, material.quantity - step)
+                                        )
+                                      }
                                       className="p-0.5 hover:bg-slate-200 rounded"
-                                      disabled={material.quantity <= 1}
+                                      disabled={material.quantity <= minQ}
                                     >
                                       <ChevronDown size={14} className="text-slate-500" />
                                     </button>
                                     <input
                                       type="number"
                                       value={material.quantity}
-                                      onChange={(e) => handleMaterialChange(material.materialId, parseFloat(e.target.value) || 1)}
-                                      step="1"
-                                      min="1"
-                                      className="w-12 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onChange={(e) => {
+                                        const v = parseFloat(e.target.value);
+                                        handleMaterialChange(
+                                          material.materialId,
+                                          Number.isFinite(v) && v > 0 ? v : minQ
+                                        );
+                                      }}
+                                      step={pkg ? "0.1" : "1"}
+                                      min={minQ}
+                                      className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                     <button
-                                      onClick={() => handleMaterialChange(material.materialId, material.quantity + 1)}
+                                      type="button"
+                                      onClick={() =>
+                                        handleMaterialChange(material.materialId, material.quantity + step)
+                                      }
                                       className="p-0.5 hover:bg-slate-200 rounded"
                                     >
                                       <ChevronUp size={14} className="text-slate-500" />
@@ -512,10 +540,11 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                                 {activeDraft.isPaid && (
                                   <span className="font-medium">{material.quantity}</span>
                                 )}
-                                <span className="text-slate-500 text-xs ml-1">{material.unit}</span>
+                                <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}

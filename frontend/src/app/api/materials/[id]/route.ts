@@ -42,7 +42,11 @@ export async function PUT(
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to update material";
-    const status = message.includes("Unauthorized") ? 401 : 500;
+    const status = message.includes("Unauthorized")
+      ? 401
+      : message.includes("Package") || message.includes("package")
+        ? 400
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

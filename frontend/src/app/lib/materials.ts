@@ -1,6 +1,7 @@
-import type { MaterialCategory } from "@prisma/client";
+import type { MaterialCategory, PackageMeasure } from "@prisma/client";
 
 import { db, interactiveTxOptions } from "./db";
+import { materialStockIsLow, normalizePackageInput } from "./materialPackage";
 
 // GET all materials
 export async function getAllMaterials() {
@@ -22,13 +23,21 @@ export async function createMaterial(data: {
   unit: string;
   stock: number;
   category?: MaterialCategory;
+  packageAmount?: number | null;
+  packageMeasure?: PackageMeasure | null;
 }) {
+  const pkg = normalizePackageInput(
+    data.packageAmount ?? null,
+    data.packageMeasure ?? null
+  );
   return db.material.create({
     data: {
       name: data.name,
       unit: data.unit,
       stock: data.stock,
       category: data.category ?? "OTHER",
+      packageAmount: pkg.packageAmount,
+      packageMeasure: pkg.packageMeasure,
     },
   });
 }
@@ -41,11 +50,24 @@ export async function updateMaterial(
     unit: string;
     stock: number;
     category: MaterialCategory;
+    packageAmount: number | null;
+    packageMeasure: PackageMeasure | null;
   }>
 ) {
+  const { packageAmount, packageMeasure, ...rest } = data;
+  const pkg =
+    packageAmount !== undefined || packageMeasure !== undefined
+      ? normalizePackageInput(packageAmount ?? null, packageMeasure ?? null)
+      : undefined;
+
   return db.material.update({
     where: { id },
-    data,
+    data: {
+      ...rest,
+      ...(pkg !== undefined
+        ? { packageAmount: pkg.packageAmount, packageMeasure: pkg.packageMeasure }
+        : {}),
+    },
   });
 }
 
@@ -125,12 +147,10 @@ export async function setServiceMaterials(
   }, interactiveTxOptions);
 }
 
-// GET materials with low stock
-export async function getLowStockMaterials(threshold: number = 10) {
-  return db.material.findMany({
-    where: {
-      stock: { lte: threshold },
-    },
+// GET materials with low stock (legacy: raw count; package: fractional units)
+export async function getLowStockMaterials() {
+  const materials = await db.material.findMany({
     orderBy: { stock: "asc" },
   });
+  return materials.filter((m) => materialStockIsLow(m));
 }

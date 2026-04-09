@@ -81,6 +81,10 @@ model Material {
   category           MaterialCategory    @default(OTHER)
   unit               String
   stock              Float
+  /// When set with packageMeasure: size of one retail unit from packaging (e.g. 1000 ml per bottle).
+  packageAmount      Float?
+  /// When set with packageAmount: stock and sale quantities are in ml or g (total on hand).
+  packageMeasure     PackageMeasure?
   createdAt          DateTime            @default(now())
   inventoryMovements InventoryMovement[]
   saleMaterials      SaleMaterial[]
@@ -91,6 +95,11 @@ enum MaterialCategory {
   HAIR_COLOR
   DEVELOPER
   OTHER
+}
+
+enum PackageMeasure {
+  ML
+  GRAM
 }
 
 model ServiceMaterial {

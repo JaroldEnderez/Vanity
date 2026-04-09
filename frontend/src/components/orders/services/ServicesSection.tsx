@@ -23,12 +23,25 @@ async function fetchServiceMaterials(serviceId: string): Promise<DraftMaterial[]
       const res = await fetch(`/api/services/${serviceId}/materials`);
       if (!res.ok) return [];
       const data = await res.json();
-      return data.map((sm: { materialId: string; quantity: number; material: { name: string; unit: string } }) => ({
-        materialId: sm.materialId,
-        name: sm.material.name,
-        unit: sm.material.unit,
-        quantity: sm.quantity,
-      }));
+      return data.map(
+        (sm: {
+          materialId: string;
+          quantity: number;
+          material: {
+            name: string;
+            unit: string;
+            packageAmount?: number | null;
+            packageMeasure?: "ML" | "GRAM" | null;
+          };
+        }) => ({
+          materialId: sm.materialId,
+          name: sm.material.name,
+          unit: sm.material.unit,
+          quantity: sm.quantity,
+          packageAmount: sm.material.packageAmount ?? null,
+          packageMeasure: sm.material.packageMeasure ?? null,
+        })
+      );
     } catch {
       return [];
     }
