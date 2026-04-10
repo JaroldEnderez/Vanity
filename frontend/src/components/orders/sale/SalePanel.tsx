@@ -5,8 +5,26 @@ import { useSaleStore, DraftSale, DraftStatus } from "@/src/app/store/saleStore"
 import { useToastStore } from "@/src/app/store/toastStore";
 import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
 import StartSaleButton from "./StartSaleButton";
-import { Clock, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, Package, X, User, UserPlus } from "lucide-react";
+import {
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  ChevronUp,
+  ChevronDown,
+  Package,
+  Plus,
+  X,
+  User,
+  UserPlus,
+} from "lucide-react";
+import OptionalMaterialsModal from "./OptionalMaterialsModal";
 import { formatPHP } from "@/src/app/lib/money";
+import {
+  draftMaterialUsesPackage,
+  formatMeasureAbbrev,
+  minSaleMaterialQuantity,
+} from "@/src/app/lib/materialPackage";
+import { isHairColoringCategory } from "@/src/app/types/service";
 
 // Staff type for dropdown
 type Staff = {
@@ -37,6 +55,13 @@ function getComputedStatus(draft: DraftSale): DraftStatus {
   return 'active';
 }
 
+/** Session-level optional materials / remarks (Materials used optional). */
+function draftHasOptionalSessionContent(d: DraftSale): boolean {
+  const materials = d.optionalSessionMaterials ?? [];
+  const remarks = (d.optionalSessionRemarks ?? "").trim();
+  return materials.length > 0 || remarks.length > 0;
+}
+
 // Status badge component
 function StatusBadge({ status }: { status: DraftStatus }) {
   const config = {
@@ -57,7 +82,8 @@ function StatusBadge({ status }: { status: DraftStatus }) {
 
 export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [mounted, setMounted] = useState(false);
-    const [showPayConfirmation, setShowPayConfirmation] = useState(false);
+    /** Payment popover: closed | warn when no optional materials/remarks | cash/change summary + confirm */
+    const [payPopover, setPayPopover] = useState<"closed" | "no_materials" | "payment">("closed");
     const [isProcessing, setIsProcessing] = useState(false);
     const [cashReceived, setCashReceived] = useState<string>("");
     const [newItemId, setNewItemId] = useState<string | null>(null);
@@ -72,6 +98,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [newCustomerDob, setNewCustomerDob] = useState("");
     const [registerSaving, setRegisterSaving] = useState(false);
     const [registerError, setRegisterError] = useState<string | null>(null);
+    const [optionalMaterialsModalOpen, setOptionalMaterialsModalOpen] = useState(false);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const itemsEndRef = useRef<HTMLDivElement>(null);
@@ -80,6 +107,13 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const draftSales = useSaleStore((state) => state.draftSales);
     const activeDraftId = useSaleStore((state) => state.activeDraftId);
     const updateItemMaterial = useSaleStore((state) => state.updateItemMaterial);
+    const setOptionalSessionMaterials = useSaleStore((state) => state.setOptionalSessionMaterials);
+    const adjustOptionalSessionMaterial = useSaleStore(
+      (state) => state.adjustOptionalSessionMaterial
+    );
+    const removeOptionalSessionMaterial = useSaleStore(
+      (state) => state.removeOptionalSessionMaterial
+    );
     const updateDraftStaff = useSaleStore((state) => state.updateDraftStaff);
     const updateDraftCustomer = useSaleStore((state) => state.updateDraftCustomer);
     const removeItemFromDraft = useSaleStore((state) => state.removeItemFromDraft);
@@ -117,7 +151,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     // Reset cash when draft changes
     useEffect(() => {
         setCashReceived("");
-        setShowPayConfirmation(false);
+        setPayPopover("closed");
     }, [activeDraftId]);
 
     // Auto-scroll when new item is added
@@ -187,7 +221,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                 throw new Error('Failed to checkout');
             }
 
-            setShowPayConfirmation(false);
+            setPayPopover("closed");
             setCashReceived("");
             useToastStore.getState().show('Session completed');
         } catch (error) {
@@ -202,6 +236,12 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         if (activeDraft) {
             updateItemMaterial(activeDraft.id, materialId, quantity);
         }
+    };
+
+    const handleOptionalMaterialChange = (materialId: string, quantity: number) => {
+      if (activeDraft) {
+        adjustOptionalSessionMaterial(activeDraft.id, materialId, quantity);
+      }
     };
 
     const handleRegisterNewCustomer = async () => {
@@ -257,13 +297,15 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         <div className="flex-shrink-0 pb-2 md:pb-3 border-b mb-2 md:mb-3 bg-slate-50 space-y-2 px-2 md:px-0">
           {/* Stylist dropdown */}
           <div className="flex items-center gap-2">
-            <User size={16} className="text-slate-500" />
+            <span className="text-xs font-medium text-slate-600 w-[4.75rem] shrink-0">Stylist</span>
+            <User size={16} className="text-slate-500 shrink-0" aria-hidden />
             {activeDraft.isPaid ? (
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-slate-700 flex-1 min-w-0">
                 {activeDraft.staffName || "No stylist assigned"}
               </span>
             ) : (
               <select
+                aria-label="Stylist"
                 value={activeDraft.staffId}
                 onChange={(e) => {
                   const selectedStylist = stylists.find((s) => s.id === e.target.value);
@@ -271,12 +313,12 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                     updateDraftStaff(activeDraft.id, selectedStylist.id, selectedStylist.name);
                   }
                 }}
-                className="flex-1 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 min-w-0 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select stylist...</option>
                 {stylists.map((stylist) => (
                   <option key={stylist.id} value={stylist.id}>
-                    {stylist.name} {stylist.role ? `(${stylist.role})` : ""}
+                    {stylist.name}
                   </option>
                 ))}
               </select>
@@ -285,13 +327,15 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
 
           {/* Customer dropdown — required for sale */}
           <div className="flex items-center gap-2">
-            <User size={16} className="text-slate-500" />
+            <span className="text-xs font-medium text-slate-600 w-[4.75rem] shrink-0">Customer</span>
+            <User size={16} className="text-slate-500 shrink-0" aria-hidden />
             {activeDraft.isPaid ? (
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-slate-700 flex-1 min-w-0">
                 {activeDraft.customerName || "—"}
               </span>
             ) : (
               <select
+                aria-label="Customer"
                 value={activeDraft.customerId ?? WALK_IN_CUSTOMER_ID}
                 onChange={(e) => {
                   const id = e.target.value;
@@ -302,7 +346,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                   const selected = customers.find((c) => c.id === id) || null;
                   updateDraftCustomer(activeDraft.id, selected);
                 }}
-                className="flex-1 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 min-w-0 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {customersSorted.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -315,13 +359,13 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
             )}
           </div>
           {!activeDraft.isPaid && isWalkIn && (
-            <p className="text-xs text-slate-500 pl-6">
+            <p className="text-xs text-slate-500 pl-[calc(4.75rem+0.5rem+1rem)]">
               Using <span className="font-medium text-slate-700">Walk-in</span> for this sale. Choose a
               named customer above if you want them on file.
             </p>
           )}
           {customersLoading ? (
-            <div className="text-[11px] text-slate-500 pl-6">Loading customers…</div>
+            <div className="text-[11px] text-slate-500 pl-[calc(4.75rem+0.5rem+1rem)]">Loading customers…</div>
           ) : null}
 
           {/* Register new customer modal */}
@@ -441,19 +485,21 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                         <div className="text-xs text-slate-500">
                           {formatPHP(item.price)} × {item.qty}
                         </div>
-                        {item.coloringDetails && (item.coloringDetails.colorUsed || item.coloringDetails.developer || item.coloringDetails.itemStaffName || item.coloringDetails.remarks) && (
+                        {item.coloringDetails &&
+                          (item.coloringDetails.itemStaffName ||
+                            item.coloringDetails.remarks) && (
                           <div className="mt-2 text-xs text-slate-600 space-y-0.5">
-                            {item.coloringDetails.colorUsed && (
-                              <div><span className="text-slate-500">Color:</span> {item.coloringDetails.colorUsed}</div>
-                            )}
-                            {item.coloringDetails.developer && (
-                              <div><span className="text-slate-500">Developer:</span> {item.coloringDetails.developer}</div>
-                            )}
                             {item.coloringDetails.itemStaffName && (
-                              <div><span className="text-slate-500">Staff:</span> {item.coloringDetails.itemStaffName}</div>
+                              <div>
+                                <span className="text-slate-500">Staff:</span>{" "}
+                                {item.coloringDetails.itemStaffName}
+                              </div>
                             )}
                             {item.coloringDetails.remarks && (
-                              <div><span className="text-slate-500">Remarks:</span> {item.coloringDetails.remarks}</div>
+                              <div>
+                                <span className="text-slate-500">Remarks:</span>{" "}
+                                {item.coloringDetails.remarks}
+                              </div>
                             )}
                           </div>
                         )}
@@ -472,37 +518,61 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                       </div>
                     </div>
 
-                    {/* Materials used */}
-                    {item.materials && item.materials.length > 0 && (
+                    {/* Per-line recipe materials (hair coloring: hidden here; recipe still applies at checkout — extras go in "Materials used (optional)") */}
+                    {item.materials &&
+                      item.materials.length > 0 &&
+                      !isHairColoringCategory(item.serviceCategory) && (
                       <div className="mt-2 pt-2 border-t border-slate-200">
                         <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
                           <Package size={12} />
                           <span>Materials</span>
                         </div>
                         <div className="space-y-1.5">
-                          {item.materials.map((material) => (
-                            <div key={material.materialId} className="flex items-center justify-between text-sm">
-                              <span className="text-slate-700">{material.name}</span>
-                              <div className="flex items-center gap-1">
+                          {item.materials.map((material) => {
+                            const minQ = minSaleMaterialQuantity(material);
+                            const pkg = draftMaterialUsesPackage(material);
+                            const step = 1;
+                            const unitLabel = pkg
+                              ? formatMeasureAbbrev(material.packageMeasure!)
+                              : material.unit;
+                            return (
+                            <div key={material.materialId} className="flex items-center justify-between text-sm gap-2">
+                              <span className="text-slate-700 truncate">{material.name}</span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
                                 {!activeDraft.isPaid && (
                                   <>
                                     <button
-                                      onClick={() => handleMaterialChange(material.materialId, material.quantity - 1)}
+                                      type="button"
+                                      onClick={() =>
+                                        handleMaterialChange(
+                                          material.materialId,
+                                          Math.max(minQ, material.quantity - step)
+                                        )
+                                      }
                                       className="p-0.5 hover:bg-slate-200 rounded"
-                                      disabled={material.quantity <= 1}
+                                      disabled={material.quantity <= minQ}
                                     >
                                       <ChevronDown size={14} className="text-slate-500" />
                                     </button>
                                     <input
                                       type="number"
                                       value={material.quantity}
-                                      onChange={(e) => handleMaterialChange(material.materialId, parseFloat(e.target.value) || 1)}
-                                      step="1"
-                                      min="1"
-                                      className="w-12 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onChange={(e) => {
+                                        const v = parseFloat(e.target.value);
+                                        handleMaterialChange(
+                                          material.materialId,
+                                          Number.isFinite(v) && v > 0 ? v : minQ
+                                        );
+                                      }}
+                                      step={pkg ? "0.1" : "1"}
+                                      min={minQ}
+                                      className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                     <button
-                                      onClick={() => handleMaterialChange(material.materialId, material.quantity + 1)}
+                                      type="button"
+                                      onClick={() =>
+                                        handleMaterialChange(material.materialId, material.quantity + step)
+                                      }
                                       className="p-0.5 hover:bg-slate-200 rounded"
                                     >
                                       <ChevronUp size={14} className="text-slate-500" />
@@ -512,15 +582,151 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                                 {activeDraft.isPaid && (
                                   <span className="font-medium">{material.quantity}</span>
                                 )}
-                                <span className="text-slate-500 text-xs ml-1">{material.unit}</span>
+                                <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
                 </div>
                 ))}
+
+                {/* Optional materials for this visit (extra stock usage; not tied to a line) */}
+                <div className="mt-3 pt-3 border-t border-slate-200/80">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs md:text-sm text-slate-600">
+                      Materials used (optional):
+                    </span>
+                    {!activeDraft.isPaid && (
+                      <button
+                        type="button"
+                        onClick={() => setOptionalMaterialsModalOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+                      >
+                        <Plus size={14} aria-hidden />
+                        Add
+                      </button>
+                    )}
+                  </div>
+                  {(() => {
+                    const optMaterials = activeDraft.optionalSessionMaterials ?? [];
+                    const optRemarks = (activeDraft.optionalSessionRemarks ?? "").trim();
+                    const hasExtras = optMaterials.length > 0;
+                    const hasOptionalContent = hasExtras || optRemarks.length > 0;
+                    if (!hasOptionalContent) {
+                      return <p className="text-xs text-slate-400">None recorded.</p>;
+                    }
+                    return (
+                    <div className="space-y-1.5">
+                      {hasExtras && (
+                        <>
+                      {optMaterials.map((material) => {
+                        const minQ = minSaleMaterialQuantity(material);
+                        const pkg = draftMaterialUsesPackage(material);
+                        const step = 1;
+                        const unitLabel = pkg
+                          ? formatMeasureAbbrev(material.packageMeasure!)
+                          : material.unit;
+                        return (
+                          <div
+                            key={`opt-${material.materialId}`}
+                            className="flex items-center justify-between text-sm gap-2 rounded-md bg-white/80 px-2 py-1.5 border border-slate-200/80"
+                          >
+                            <span className="text-slate-700 truncate">{material.name}</span>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {!activeDraft.isPaid && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOptionalMaterialChange(
+                                        material.materialId,
+                                        Math.max(minQ, material.quantity - step)
+                                      )
+                                    }
+                                    className="p-0.5 hover:bg-slate-200 rounded"
+                                    disabled={material.quantity <= minQ}
+                                  >
+                                    <ChevronDown size={14} className="text-slate-500" />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    value={material.quantity}
+                                    onChange={(e) => {
+                                      const v = parseFloat(e.target.value);
+                                      handleOptionalMaterialChange(
+                                        material.materialId,
+                                        Number.isFinite(v) && v > 0 ? v : minQ
+                                      );
+                                    }}
+                                    step={pkg ? "0.1" : "1"}
+                                    min={minQ}
+                                    className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOptionalMaterialChange(
+                                        material.materialId,
+                                        material.quantity + step
+                                      )
+                                    }
+                                    className="p-0.5 hover:bg-slate-200 rounded"
+                                  >
+                                    <ChevronUp size={14} className="text-slate-500" />
+                                  </button>
+                                </>
+                              )}
+                              {activeDraft.isPaid && (
+                                <span className="font-medium">{material.quantity}</span>
+                              )}
+                              <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
+                              {!activeDraft.isPaid && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    removeOptionalSessionMaterial(
+                                      activeDraft.id,
+                                      material.materialId
+                                    )
+                                  }
+                                  className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-500"
+                                  title="Remove"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {optRemarks.length > 0 && (
+                        <div className="rounded-md bg-slate-50/90 border border-slate-200/80 px-2 py-1.5 mb-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5">
+                            Remarks
+                          </p>
+                          <p className="text-xs text-slate-700 whitespace-pre-wrap">{optRemarks}</p>
+                        </div>
+                      )}
+                        </>
+                      )}
+                    </div>
+                    );
+                  })()}
+                </div>
+
+                <OptionalMaterialsModal
+                  open={optionalMaterialsModalOpen}
+                  onClose={() => setOptionalMaterialsModalOpen(false)}
+                  initialSelection={activeDraft.optionalSessionMaterials ?? []}
+                  initialRemarks={activeDraft.optionalSessionRemarks ?? ""}
+                  onSave={(materials, remarks) => {
+                    setOptionalSessionMaterials(activeDraft.id, materials, remarks);
+                  }}
+                />
+
                 {/* Scroll anchor for auto-scroll */}
                 <div ref={itemsEndRef} />
             </div>
@@ -579,45 +785,81 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                         </p>
                       )}
                       <button
-                        onClick={() => setShowPayConfirmation(true)}
+                        type="button"
+                        onClick={() => {
+                          if (!canCheckout) return;
+                          if (draftHasOptionalSessionContent(activeDraft)) {
+                            setPayPopover("payment");
+                          } else {
+                            setPayPopover("no_materials");
+                          }
+                        }}
                         disabled={!canCheckout}
                         className="w-full rounded-lg bg-green-600 py-2 md:py-3 text-sm md:text-base text-white font-semibold transition hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Mark as Paid
                       </button>
 
-                      {/* Inline confirmation popover */}
-                      {showPayConfirmation && canCheckout && (
+                      {payPopover !== "closed" && canCheckout && (
                         <div className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
-                          <div className="text-sm text-slate-600 mb-3 space-y-1">
-                            <div className="flex justify-between">
-                              <span>Total:</span>
-                              <span className="font-medium">{formatPHP(activeDraft.total)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Cash:</span>
-                              <span className="font-medium">{formatPHP(cashAmount)}</span>
-                            </div>
-                            <div className="flex justify-between text-green-600 font-semibold">
-                              <span>Change:</span>
-                              <span>{formatPHP(changeAmount)}</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setShowPayConfirmation(false)}
-                              className="flex-1 px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-100 transition"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleConfirmPayment}
-                              disabled={isProcessing}
-                              className="flex-1 px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50"
-                            >
-                              {isProcessing ? '...' : 'Confirm'}
-                            </button>
-                          </div>
+                          {payPopover === "no_materials" && (
+                            <>
+                              <p className="text-sm text-amber-800 mb-3">
+                                No materials used were listed.
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPayPopover("closed")}
+                                  className="flex-1 px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-100 transition"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPayPopover("payment")}
+                                  className="flex-1 px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 transition font-medium"
+                                >
+                                  Proceed
+                                </button>
+                              </div>
+                            </>
+                          )}
+                          {payPopover === "payment" && (
+                            <>
+                              <div className="text-sm text-slate-600 mb-3 space-y-1">
+                                <div className="flex justify-between">
+                                  <span>Total:</span>
+                                  <span className="font-medium">{formatPHP(activeDraft.total)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Cash:</span>
+                                  <span className="font-medium">{formatPHP(cashAmount)}</span>
+                                </div>
+                                <div className="flex justify-between text-green-600 font-semibold">
+                                  <span>Change:</span>
+                                  <span>{formatPHP(changeAmount)}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPayPopover("closed")}
+                                  className="flex-1 px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-100 transition"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleConfirmPayment}
+                                  disabled={isProcessing}
+                                  className="flex-1 px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50"
+                                >
+                                  {isProcessing ? "..." : "Confirm"}
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

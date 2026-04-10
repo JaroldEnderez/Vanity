@@ -1,27 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Plus, Pencil, Trash2, X, Check, Clock, Package, ChevronUp, ChevronDown } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Pencil, Trash2, X, Check, Clock } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
 import {
   DEFAULT_SERVICE_CATEGORY,
   SERVICE_CATEGORIES,
   labelServiceCategory,
 } from "@/src/app/types/service";
-
-type Material = {
-  id: string;
-  name: string;
-  unit: string;
-  stock: number;
-};
-
-type ServiceMaterial = {
-  id: string;
-  materialId: string;
-  quantity: number;
-  material: Material;
-};
 
 type Service = {
   id: string;
@@ -32,12 +18,10 @@ type Service = {
   price: number;
   isActive: boolean;
   usesMaterials: boolean;
-  materials?: ServiceMaterial[];
 };
 
 type Props = {
   initialServices: Service[];
-  initialMaterials?: Material[];
 };
 
 type ServiceForm = {
@@ -56,30 +40,14 @@ const emptyForm: ServiceForm = {
   price: 0,
 };
 
-export default function ServicesManager({ initialServices, initialMaterials = [] }: Props) {
+export default function ServicesManager({ initialServices }: Props) {
   const [services, setServices] = useState<Service[]>(initialServices);
-  const [materials, setMaterials] = useState<Material[]>(initialMaterials);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ServiceForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [addServiceError, setAddServiceError] = useState<string | null>(null);
-
-  // Materials modal state
-  const [materialsModalServiceId, setMaterialsModalServiceId] = useState<string | null>(null);
-  const [serviceMaterials, setServiceMaterials] = useState<Array<{ materialId: string; quantity: number }>>([]);
-  const [isSavingMaterials, setIsSavingMaterials] = useState(false);
-
-  // Fetch materials on mount if not provided
-  useEffect(() => {
-    if (initialMaterials.length === 0) {
-      fetch("/api/materials")
-        .then((res) => res.json())
-        .then(setMaterials)
-        .catch(console.error);
-    }
-  }, [initialMaterials.length]);
 
   const sortedServices = useMemo(
     () => [...services].sort((a, b) => a.name.localeCompare(b.name)),
@@ -136,7 +104,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
       }
 
       const newService = data;
-      setServices([...services, { ...newService, materials: [] }]);
+      setServices([...services, newService]);
       setIsAddingNew(false);
       setFormData(emptyForm);
       setAddServiceError(null);
@@ -162,7 +130,7 @@ export default function ServicesManager({ initialServices, initialMaterials = []
       if (!res.ok) throw new Error("Failed to update service");
 
       const updatedService = await res.json();
-      setServices(services.map((s) => (s.id === editingId ? { ...updatedService, materials: s.materials } : s)));
+      setServices(services.map((s) => (s.id === editingId ? updatedService : s)));
       setEditingId(null);
       setFormData(emptyForm);
     } catch (error) {
@@ -190,111 +158,6 @@ export default function ServicesManager({ initialServices, initialMaterials = []
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Materials modal handlers
-  const openMaterialsModal = async (serviceId: string) => {
-    setMaterialsModalServiceId(serviceId);
-    try {
-      const res = await fetch(`/api/services/${serviceId}/materials`);
-      const data = await res.json();
-      setServiceMaterials(
-        data.map((sm: ServiceMaterial) => ({
-          materialId: sm.materialId,
-          quantity: sm.quantity,
-        }))
-      );
-    } catch (error) {
-      console.error(error);
-      setServiceMaterials([]);
-    }
-  };
-
-  const closeMaterialsModal = () => {
-    setMaterialsModalServiceId(null);
-    setServiceMaterials([]);
-  };
-
-  const addMaterialToService = () => {
-    // Find first material not already added
-    const availableMaterial = materials.find(
-      (m) => !serviceMaterials.some((sm) => sm.materialId === m.id)
-    );
-    if (availableMaterial) {
-      setServiceMaterials([
-        ...serviceMaterials,
-        { materialId: availableMaterial.id, quantity: 1 },
-      ]);
-    }
-  };
-
-  const updateMaterialQuantity = (materialId: string, delta: number) => {
-    setServiceMaterials(
-      serviceMaterials.map((sm) =>
-        sm.materialId === materialId
-          ? { ...sm, quantity: Math.max(1, sm.quantity + delta) }
-          : sm
-      )
-    );
-  };
-
-  const setMaterialQuantity = (materialId: string, quantity: number) => {
-    setServiceMaterials(
-      serviceMaterials.map((sm) =>
-        sm.materialId === materialId
-          ? { ...sm, quantity: Math.max(1, quantity) }
-          : sm
-      )
-    );
-  };
-
-  const removeMaterialFromService = (materialId: string) => {
-    setServiceMaterials(serviceMaterials.filter((sm) => sm.materialId !== materialId));
-  };
-
-  const changeMaterial = (oldMaterialId: string, newMaterialId: string) => {
-    setServiceMaterials(
-      serviceMaterials.map((sm) =>
-        sm.materialId === oldMaterialId ? { ...sm, materialId: newMaterialId } : sm
-      )
-    );
-  };
-
-  const saveMaterials = async () => {
-    if (!materialsModalServiceId) return;
-
-    setIsSavingMaterials(true);
-    try {
-      const res = await fetch(`/api/services/${materialsModalServiceId}/materials`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ materials: serviceMaterials }),
-      });
-
-      if (!res.ok) throw new Error("Failed to save materials");
-
-      const updatedMaterials = await res.json();
-
-      // Update local service state
-      setServices(
-        services.map((s) =>
-          s.id === materialsModalServiceId
-            ? { ...s, usesMaterials: serviceMaterials.length > 0, materials: updatedMaterials }
-            : s
-        )
-      );
-
-      closeMaterialsModal();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to save materials");
-    } finally {
-      setIsSavingMaterials(false);
-    }
-  };
-
-  const getServiceMaterialCount = (service: Service) => {
-    return service.materials?.length || 0;
   };
 
   return (
@@ -511,14 +374,8 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                         />
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => openMaterialsModal(service.id)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-100 rounded transition"
-                      >
-                        <Package size={14} />
-                        {getServiceMaterialCount(service)}
-                      </button>
+                    <td className="px-4 py-3 text-center text-xs text-slate-400">
+                      Not used
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
@@ -560,21 +417,8 @@ export default function ServicesManager({ initialServices, initialMaterials = []
                     <td className="px-4 py-3 text-right">
                       <span className="font-medium text-slate-900">{formatPHP(service.price)}</span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => openMaterialsModal(service.id)}
-                        disabled={isAddingNew || editingId !== null}
-                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition disabled:opacity-50 ${
-                          getServiceMaterialCount(service) > 0
-                            ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
-                            : "text-slate-500 hover:bg-slate-100"
-                        }`}
-                      >
-                        <Package size={14} />
-                        {getServiceMaterialCount(service) > 0
-                          ? `${getServiceMaterialCount(service)} item${getServiceMaterialCount(service) > 1 ? "s" : ""}`
-                          : "None"}
-                      </button>
+                    <td className="px-4 py-3 text-center text-xs text-slate-400">
+                      Not used
                     </td>
                     <td className="px-4 py-3">
                       {deleteConfirm === service.id ? (
@@ -633,132 +477,6 @@ export default function ServicesManager({ initialServices, initialMaterials = []
         </div>
       )}
       </div>
-
-
-      {/* Materials Modal */}
-      {materialsModalServiceId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                Materials for {services.find((s) => s.id === materialsModalServiceId)?.name}
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Set default materials and quantities used per service
-              </p>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-              {serviceMaterials.length === 0 ? (
-                <p className="text-center text-slate-500 py-4">
-                  No materials assigned. Add materials below.
-                </p>
-              ) : (
-                serviceMaterials.map((sm) => {
-                  const material = materials.find((m) => m.id === sm.materialId);
-                  return (
-                    <div
-                      key={sm.materialId}
-                      className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
-                    >
-                      {/* Material Select */}
-                      <select
-                        value={sm.materialId}
-                        onChange={(e) => changeMaterial(sm.materialId, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {materials.map((m) => (
-                          <option
-                            key={m.id}
-                            value={m.id}
-                            disabled={serviceMaterials.some(
-                              (existing) => existing.materialId === m.id && existing.materialId !== sm.materialId
-                            )}
-                          >
-                            {m.name} ({m.unit})
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Quantity Controls */}
-                      <div className="flex items-center border border-slate-300 rounded-md">
-                        <button
-                          onClick={() => updateMaterialQuantity(sm.materialId, -1)}
-                          className="p-1.5 hover:bg-slate-100 transition"
-                        >
-                          <ChevronDown size={16} className="text-slate-600" />
-                        </button>
-                        <input
-                          type="number"
-                          value={sm.quantity}
-                          onChange={(e) => setMaterialQuantity(sm.materialId, parseFloat(e.target.value) || 1)}
-                          step="1"
-                          min="1"
-                          className="w-14 text-center text-sm border-x border-slate-300 py-1.5 focus:outline-none"
-                        />
-                        <button
-                          onClick={() => updateMaterialQuantity(sm.materialId, 1)}
-                          className="p-1.5 hover:bg-slate-100 transition"
-                        >
-                          <ChevronUp size={16} className="text-slate-600" />
-                        </button>
-                      </div>
-
-                      {/* Unit Label */}
-                      <span className="text-sm text-slate-500 w-10">{material?.unit}</span>
-
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => removeMaterialFromService(sm.materialId)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-
-              {/* Add Material Button */}
-              {materials.length > serviceMaterials.length && (
-                <button
-                  onClick={addMaterialToService}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-emerald-400 hover:text-emerald-600 transition"
-                >
-                  <Plus size={18} />
-                  Add Material
-                </button>
-              )}
-
-              {materials.length === 0 && (
-                <p className="text-center text-amber-600 text-sm py-2">
-                  No materials in inventory. Add materials in the Inventory page first.
-                </p>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={closeMaterialsModal}
-                disabled={isSavingMaterials}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-md transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveMaterials}
-                disabled={isSavingMaterials}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-50"
-              >
-                {isSavingMaterials ? "Saving..." : "Save Materials"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

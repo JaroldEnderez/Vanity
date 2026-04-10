@@ -44,7 +44,13 @@ export async function getServices(branchId?: string) {
       materials: {
         include: {
           material: {
-            select: { id: true, name: true, unit: true },
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              packageAmount: true,
+              packageMeasure: true,
+            },
           },
         },
       },

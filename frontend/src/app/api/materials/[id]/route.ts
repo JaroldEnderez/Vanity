@@ -42,7 +42,11 @@ export async function PUT(
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to update material";
-    const status = message.includes("Unauthorized") ? 401 : 500;
+    const status = message.includes("Unauthorized")
+      ? 401
+      : message.includes("Package") || message.includes("package")
+        ? 400
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
@@ -54,8 +58,8 @@ export async function DELETE(
   try {
     await requireAuthenticatedUser();
     const { id } = await params;
-    await deleteMaterial(id);
-    return NextResponse.json({ success: true });
+    const material = await deleteMaterial(id);
+    return NextResponse.json({ success: true, material });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to delete material";

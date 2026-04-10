@@ -159,15 +159,22 @@ async function main(){
     // ============================================
     console.log("Seeding hair color inventory...")
 
+    /** ml per retail tube (demo default; adjust per product in Inventory). */
+    const TUBE_ML = 60;
+    /** ml per retail bottle (1 L; 4 L bottles would use 4000 here). */
+    const BOTTLE_ML = 1000;
+
     const hairColorMaterials = [
-        // Loreal Majirel variants
+        // Loreal Majirel variants — stock stored as total ml
         {
             name: "5.1 Ash Brown",
             brand: "Loreal",
             productName: "Majirel",
             category: "HAIR_COLOR" as const,
             unit: "tube",
-            stock: 3,
+            packageAmount: TUBE_ML,
+            packageMeasure: "ML" as const,
+            stock: 3 * TUBE_ML,
         },
         {
             name: "6.3 Golden Brown",
@@ -175,7 +182,9 @@ async function main(){
             productName: "Majirel",
             category: "HAIR_COLOR" as const,
             unit: "tube",
-            stock: 5,
+            packageAmount: TUBE_ML,
+            packageMeasure: "ML" as const,
+            stock: 5 * TUBE_ML,
         },
         {
             name: "7.1 Dark Blonde",
@@ -183,7 +192,9 @@ async function main(){
             productName: "Majirel",
             category: "HAIR_COLOR" as const,
             unit: "tube",
-            stock: 4,
+            packageAmount: TUBE_ML,
+            packageMeasure: "ML" as const,
+            stock: 4 * TUBE_ML,
         },
         // Matrix SoColor variants
         {
@@ -192,7 +203,9 @@ async function main(){
             productName: "SoColor",
             category: "HAIR_COLOR" as const,
             unit: "tube",
-            stock: 4,
+            packageAmount: TUBE_ML,
+            packageMeasure: "ML" as const,
+            stock: 4 * TUBE_ML,
         },
         {
             name: "7C Copper Blonde",
@@ -200,16 +213,20 @@ async function main(){
             productName: "SoColor",
             category: "HAIR_COLOR" as const,
             unit: "tube",
-            stock: 6,
+            packageAmount: TUBE_ML,
+            packageMeasure: "ML" as const,
+            stock: 6 * TUBE_ML,
         },
-        // Developers
+        // Developers — stock stored as total ml
         {
             name: "20 Volume Developer",
             brand: "Loreal",
             productName: "Oxydant",
             category: "DEVELOPER" as const,
             unit: "bottle",
-            stock: 10,
+            packageAmount: BOTTLE_ML,
+            packageMeasure: "ML" as const,
+            stock: 10 * BOTTLE_ML,
         },
         {
             name: "30 Volume Developer",
@@ -217,7 +234,9 @@ async function main(){
             productName: "Cream Developer",
             category: "DEVELOPER" as const,
             unit: "bottle",
-            stock: 8,
+            packageAmount: BOTTLE_ML,
+            packageMeasure: "ML" as const,
+            stock: 8 * BOTTLE_ML,
         },
     ];
 
@@ -242,6 +261,8 @@ async function main(){
                     productName: material.productName,
                     category: material.category,
                     unit: material.unit,
+                    packageAmount: material.packageAmount,
+                    packageMeasure: material.packageMeasure,
                     stock: existing.stock || material.stock,
                 },
             });
@@ -296,9 +317,10 @@ async function main(){
     const developer = await db.material.findFirst({
         where: { name: "30 Volume Developer", brand: "Matrix", productName: "Cream Developer" },
     })
+    // Quantities in ml (tube ≈ 60 ml, half of 1 L bottle = 500 ml developer)
     const hairColoringRecipe = [
-        { materialId: tubeColor?.id, qty: 1 },
-        { materialId: developer?.id, qty: 0.5 },
+        { materialId: tubeColor?.id, qty: TUBE_ML },
+        { materialId: developer?.id, qty: 500 },
     ].filter((x): x is { materialId: string; qty: number } => Boolean(x.materialId))
 
     if (hairColoringRecipe.length > 0) {
