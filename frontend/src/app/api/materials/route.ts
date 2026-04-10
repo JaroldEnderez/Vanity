@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { getAllMaterials, createMaterial } from "@/src/app/lib/materials";
 import { requireAuthenticatedUser } from "@/src/app/lib/auth-utils";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requireAuthenticatedUser();
-    const materials = await getAllMaterials();
+    const { searchParams } = new URL(req.url);
+    const includeInactive =
+      searchParams.get("includeInactive") === "1" ||
+      searchParams.get("includeInactive") === "true";
+    const materials = await getAllMaterials({ includeInactive });
     return NextResponse.json(materials);
   } catch (error) {
     console.error(error);

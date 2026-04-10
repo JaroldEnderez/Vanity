@@ -1,8 +1,10 @@
+import { Prisma } from "@prisma/client";
 import { db, interactiveTxOptions } from "./db";
 import {
   deductMaterialsForSaleCompletion,
   resolveMaterialsFromServiceRecipes,
 } from "./inventory";
+import { optionalJsonToDeductionRows } from "./optionalSessionMaterials";
 import { SaleStatus } from "@prisma/client";
 
 // Optimized include - only fetch what's needed
@@ -96,18 +98,30 @@ export async function createSession(data: {
   });
 }
 
-// UPDATE session (name, customer, staff, etc.)
+// UPDATE session (name, customer, staff, optionalMaterials JSON, etc.)
 export async function updateSession(
   id: string,
   data: Partial<{
     name: string;
     customerId: string;
     staffId: string;
+    optionalMaterials: unknown | null;
   }>
 ) {
+  const updateData: Prisma.SaleUncheckedUpdateInput = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.customerId !== undefined) updateData.customerId = data.customerId;
+  if (data.staffId !== undefined) updateData.staffId = data.staffId;
+  if (data.optionalMaterials !== undefined) {
+    updateData.optionalMaterials =
+      data.optionalMaterials === null
+        ? Prisma.JsonNull
+        : (data.optionalMaterials as Prisma.InputJsonValue);
+  }
+
   return db.sale.update({
     where: { id },
-    data,
+    data: updateData,
     include: sessionInclude,
   });
 }
@@ -359,10 +373,14 @@ export async function checkoutSession(id: string, cashReceived?: number) {
   return db.$transaction(async (tx) => {
     const session = await tx.sale.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        branchId: true,
+        optionalMaterials: true,
         saleServices: true,
         saleAddOns: true,
-        saleMaterials: true, // Don't need material details, just IDs and quantities
+        saleMaterials: true,
       },
     });
 
@@ -404,6 +422,11 @@ export async function checkoutSession(id: string, cashReceived?: number) {
         });
       }
     }
+
+    materialsToDeduct = [
+      ...materialsToDeduct,
+      ...optionalJsonToDeductionRows(session.optionalMaterials),
+    ];
 
     await deductMaterialsForSaleCompletion(tx, session.id, materialsToDeduct);
 

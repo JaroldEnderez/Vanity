@@ -53,7 +53,12 @@ export async function PATCH(
     const body = await req.json();
     await ensureWalkInCustomer();
 
-    const data: { name?: string; customerId?: string; staffId?: string } = {};
+    const data: {
+      name?: string;
+      customerId?: string;
+      staffId?: string;
+      optionalMaterials?: unknown | null;
+    } = {};
     if (typeof body.name === "string") {
       data.name = body.name.trim();
     }
@@ -66,6 +71,43 @@ export async function PATCH(
         cid === null || cid === undefined || cid === ""
           ? WALK_IN_CUSTOMER_ID
           : String(cid).trim();
+    }
+
+    if ("optionalMaterials" in body) {
+      const raw = body.optionalMaterials;
+      if (raw === null || raw === undefined) {
+        data.optionalMaterials = null;
+      } else if (Array.isArray(raw)) {
+        data.optionalMaterials = raw;
+      } else if (typeof raw === "object") {
+        const o = raw as Record<string, unknown>;
+        if (
+          "materials" in o &&
+          o.materials !== undefined &&
+          !Array.isArray(o.materials)
+        ) {
+          return NextResponse.json(
+            { error: "optionalMaterials.materials must be an array when present" },
+            { status: 400 }
+          );
+        }
+        if (
+          "remarks" in o &&
+          o.remarks !== undefined &&
+          typeof o.remarks !== "string"
+        ) {
+          return NextResponse.json(
+            { error: "optionalMaterials.remarks must be a string when present" },
+            { status: 400 }
+          );
+        }
+        data.optionalMaterials = raw;
+      } else {
+        return NextResponse.json(
+          { error: "optionalMaterials must be an array, object, or null" },
+          { status: 400 }
+        );
+      }
     }
 
     const session = await updateSession(id, data);

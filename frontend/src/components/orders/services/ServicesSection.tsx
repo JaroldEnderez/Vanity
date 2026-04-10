@@ -1,10 +1,10 @@
 "use client";
 
-import { Service, isHairColoringCategory, labelServiceCategory } from "@/src/app/types/service";
+import { useRef, useCallback, useMemo, useState } from "react";
+import { Service, labelServiceCategory } from "@/src/app/types/service";
 import ServiceGrid from "./ServiceGrid";
-import HairColoringModal from "./HairColoringModal";
-import { useSaleStore, DraftMaterial, ColoringDetails } from "@/src/app/store/saleStore";
-import { useState, useCallback, useMemo } from "react";
+import { useSaleStore, DraftMaterial } from "@/src/app/store/saleStore";
+import type { PackageMeasure } from "@prisma/client";
 import { Search } from "lucide-react";
 
 type Props = {
@@ -12,42 +12,27 @@ type Props = {
   staffId: string;
 };
 
-// Cache so we reuse materials on click after prefetch (instant when hovered first)
-const materialsCache = new Map<string, Promise<DraftMaterial[]>>();
+type ApiServiceMaterialRow = {
+  materialId: string;
+  quantity: number;
+  material: {
+    id: string;
+    name: string;
+    unit: string;
+    packageAmount?: number | null;
+    packageMeasure?: PackageMeasure | null;
+  };
+};
 
-async function fetchServiceMaterials(serviceId: string): Promise<DraftMaterial[]> {
-  const cached = materialsCache.get(serviceId);
-  if (cached) return cached;
-  const promise = (async () => {
-    try {
-      const res = await fetch(`/api/services/${serviceId}/materials`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.map(
-        (sm: {
-          materialId: string;
-          quantity: number;
-          material: {
-            name: string;
-            unit: string;
-            packageAmount?: number | null;
-            packageMeasure?: "ML" | "GRAM" | null;
-          };
-        }) => ({
-          materialId: sm.materialId,
-          name: sm.material.name,
-          unit: sm.material.unit,
-          quantity: sm.quantity,
-          packageAmount: sm.material.packageAmount ?? null,
-          packageMeasure: sm.material.packageMeasure ?? null,
-        })
-      );
-    } catch {
-      return [];
-    }
-  })();
-  materialsCache.set(serviceId, promise);
-  return promise;
+function mapApiToDraftMaterials(rows: ApiServiceMaterialRow[]): DraftMaterial[] {
+  return rows.map((sm) => ({
+    materialId: sm.materialId,
+    name: sm.material.name,
+    unit: sm.material.unit,
+    quantity: sm.quantity,
+    packageAmount: sm.material.packageAmount ?? null,
+    packageMeasure: sm.material.packageMeasure ?? null,
+  }));
 }
 
 export default function ServicesSection({ services, staffId }: Props) {
@@ -56,8 +41,9 @@ export default function ServicesSection({ services, staffId }: Props) {
   const addItemToDraft = useSaleStore((state) => state.addItemToDraft);
   const isLoading = useSaleStore((state) => state.isLoading);
 
+  const materialsCache = useRef<Map<string, DraftMaterial[]>>(new Map());
+
   const [isCreating, setIsCreating] = useState(false);
-  const [hairColoringService, setHairColoringService] = useState<Service | null>(null);
   const [serviceSearch, setServiceSearch] = useState("");
 
   const orderedServices = useMemo(
@@ -76,14 +62,30 @@ export default function ServicesSection({ services, staffId }: Props) {
     });
   }, [orderedServices, serviceSearch]);
 
-  const prefetchMaterials = useCallback((serviceId: string) => {
-    fetchServiceMaterials(serviceId);
+  const fetchServiceMaterials = useCallback(async (serviceId: string): Promise<DraftMaterial[]> => {
+    const cached = materialsCache.current.get(serviceId);
+    if (cached) return cached;
+    const res = await fetch(`/api/services/${serviceId}/materials`);
+    if (!res.ok) {
+      materialsCache.current.set(serviceId, []);
+      return [];
+    }
+    const data: ApiServiceMaterialRow[] = await res.json();
+    const mapped = mapApiToDraftMaterials(data);
+    materialsCache.current.set(serviceId, mapped);
+    return mapped;
   }, []);
 
+  const prefetchMaterials = useCallback(
+    (serviceId: string) => {
+      void fetchServiceMaterials(serviceId).catch(() => {});
+    },
+    [fetchServiceMaterials]
+  );
+
   const addItem = useCallback(
-    async (service: Service, materials: DraftMaterial[], coloringDetails?: ColoringDetails) => {
+    async (service: Service, materials: DraftMaterial[] = []) => {
       const activeDraft = getActiveDraft();
-      const displayName = coloringDetails?.serviceDisplayName || service.name;
 
       if (!activeDraft) {
         setIsCreating(true);
@@ -92,12 +94,12 @@ export default function ServicesSection({ services, staffId }: Props) {
           if (newDraft) {
             addItemToDraft(newDraft.id, {
               serviceId: service.id,
-              name: displayName,
+              serviceCategory: service.category ?? null,
+              name: service.name,
               price: service.price,
               qty: 1,
               durationMin: service.durationMin ?? undefined,
               materials,
-              coloringDetails,
             });
           }
         } catch (err) {
@@ -111,12 +113,12 @@ export default function ServicesSection({ services, staffId }: Props) {
 
       addItemToDraft(activeDraft.id, {
         serviceId: service.id,
-        name: displayName,
+        serviceCategory: service.category ?? null,
+        name: service.name,
         price: service.price,
         qty: 1,
         durationMin: service.durationMin ?? undefined,
         materials,
-        coloringDetails,
       });
     },
     [getActiveDraft, createDraft, addItemToDraft, staffId]
@@ -124,20 +126,7 @@ export default function ServicesSection({ services, staffId }: Props) {
 
   const handleSelectService = async (service: Service) => {
     const materials = await fetchServiceMaterials(service.id);
-
-    if (isHairColoringCategory(service.category)) {
-      setHairColoringService(service);
-      return;
-    }
-
     await addItem(service, materials);
-  };
-
-  const handleHairColoringConfirm = async (details: ColoringDetails) => {
-    if (!hairColoringService) return;
-    const materials = await fetchServiceMaterials(hairColoringService.id);
-    await addItem(hairColoringService, materials, details);
-    setHairColoringService(null);
   };
 
   return (
@@ -171,15 +160,6 @@ export default function ServicesSection({ services, staffId }: Props) {
           services={filteredServices}
           onSelectService={handleSelectService}
           onHoverService={prefetchMaterials}
-          selectedServiceId={hairColoringService?.id}
-        />
-      )}
-
-      {hairColoringService && (
-        <HairColoringModal
-          service={hairColoringService}
-          onConfirm={handleHairColoringConfirm}
-          onCancel={() => setHairColoringService(null)}
         />
       )}
 

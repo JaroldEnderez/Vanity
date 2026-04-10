@@ -58,8 +58,8 @@ export async function DELETE(
   try {
     await requireAuthenticatedUser();
     const { id } = await params;
-    await deleteMaterial(id);
-    return NextResponse.json({ success: true });
+    const material = await deleteMaterial(id);
+    return NextResponse.json({ success: true, material });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to delete material";

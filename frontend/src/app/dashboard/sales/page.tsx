@@ -5,7 +5,6 @@ import SalesChartLoader from "@/src/components/charts/SalesChartLoader";
 import SalesHistoryList from "@/src/components/sales/SalesHistoryList";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
-import { Service } from "@prisma/client";
 
 type QuickFilter = "today" | "last7" | "last30" | "thisYear" | "allTime" | "custom";
 
@@ -32,6 +31,7 @@ type Sale = {
     developer?: string | null;
     service: { id: string; name: string };
   }>;
+  optionalMaterials?: unknown;
 };
 
 function getDateRangeForQuickFilter(filter: QuickFilter): { start: Date; end: Date } {

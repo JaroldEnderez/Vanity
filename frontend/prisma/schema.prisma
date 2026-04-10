@@ -81,6 +81,8 @@ model Material {
   category           MaterialCategory    @default(OTHER)
   unit               String
   stock              Float
+  /// When false, hidden from pickers (optional materials, new recipes); kept for sale history / FKs.
+  isActive           Boolean             @default(true)
   /// When set with packageMeasure: size of one retail unit from packaging (e.g. 1000 ml per bottle).
   packageAmount      Float?
   /// When set with packageAmount: stock and sale quantities are in ml or g (total on hand).
@@ -137,6 +139,9 @@ model Sale {
 
   cashReceived Float?      // Cash given by customer
   changeGiven  Float?      // Change returned to customer
+
+  /// Optional materials used in this visit (not tied to a service line); JSON array of { materialId, quantity, name, unit, ... }
+  optionalMaterials Json?
 
   createdAt  DateTime      @default(now())
   updatedAt  DateTime?

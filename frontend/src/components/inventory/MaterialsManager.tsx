@@ -1,8 +1,17 @@
 "use client";
 
 import type { MaterialCategory, PackageMeasure } from "@prisma/client";
-import { useState } from "react";
-import { Plus, Pencil, Trash2, X, Check, Package, AlertTriangle } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Check,
+  Package,
+  AlertTriangle,
+  RotateCcw,
+} from "lucide-react";
 import {
   formatStockDisplayText,
   hasPackageMaterial,
@@ -17,6 +26,8 @@ type Material = {
   category: MaterialCategory;
   packageAmount: number | null;
   packageMeasure: PackageMeasure | null;
+  /** Omitted on older rows; treat as active */
+  isActive?: boolean;
 };
 
 type Props = {
@@ -53,7 +64,13 @@ function categoryLabel(category: MaterialCategory): string {
   return CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? category;
 }
 
-const commonUnits = ["pcs", "ml", "g", "oz", "tube", "bottle", "box"];
+const commonUnits = ["pcs", "tube", "bottle"];
+
+/** Dropdown options; include current value if legacy data used another unit. */
+function unitSelectOptions(selectedUnit: string): string[] {
+  if (commonUnits.includes(selectedUnit)) return commonUnits;
+  return [...commonUnits, selectedUnit];
+}
 
 function formHasCompletePackage(form: MaterialForm): boolean {
   return (
@@ -116,6 +133,37 @@ export default function MaterialsManager({ initialMaterials }: Props) {
   const [formData, setFormData] = useState<MaterialForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showRemoved, setShowRemoved] = useState(false);
+
+  const displayMaterials = useMemo(() => {
+    if (showRemoved) return materials;
+    return materials.filter((m) => m.isActive !== false);
+  }, [materials, showRemoved]);
+
+  const toggleShowRemoved = async () => {
+    const next = !showRemoved;
+    setShowRemoved(next);
+    setIsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/materials${next ? "?includeInactive=1" : ""}`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err?.error === "string" ? err.error : "Failed to load materials"
+        );
+      }
+      const data: unknown = await res.json();
+      setMaterials(Array.isArray(data) ? (data as Material[]) : []);
+    } catch (e) {
+      console.error(e);
+      setShowRemoved(!next);
+      alert(e instanceof Error ? e.message : "Failed to load materials");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAddNew = () => {
     setIsAddingNew(true);
@@ -124,6 +172,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
   };
 
   const handleEdit = (material: Material) => {
+    if (material.isActive === false) return;
     setEditingId(material.id);
     setIsAddingNew(false);
     setFormData(materialToForm(material));
@@ -214,19 +263,65 @@ export default function MaterialsManager({ initialMaterials }: Props) {
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("Failed to delete material");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err?.error === "string" ? err.error : "Failed to remove material"
+        );
+      }
 
-      setMaterials(materials.filter((m) => m.id !== id));
+      const body = await res.json().catch(() => ({}));
+      const updated =
+        body &&
+        typeof body === "object" &&
+        "material" in body &&
+        body.material &&
+        typeof body.material === "object"
+          ? (body.material as Material)
+          : null;
+      setMaterials((prev) =>
+        prev.map((m) =>
+          m.id === id ? { ...m, ...(updated ?? { isActive: false }) } : m
+        )
+      );
       setDeleteConfirm(null);
     } catch (error) {
       console.error(error);
-      alert("Failed to delete material");
+      alert(error instanceof Error ? error.message : "Failed to remove material");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const lowStockCount = materials.filter((m) => materialStockSeverity(m) !== "ok").length;
+  const lowStockCount = materials.filter(
+    (m) => m.isActive !== false && materialStockSeverity(m) !== "ok"
+  ).length;
+
+  const handleRestore = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/materials/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: true }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err?.error === "string" ? err.error : "Failed to restore material"
+        );
+      }
+      const restored = (await res.json()) as Material;
+      setMaterials((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, ...restored } : m))
+      );
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Failed to restore material");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const packageFormFields = (variant: "new" | "edit") => {
     const ring = variant === "new" ? "focus:ring-emerald-500" : "focus:ring-blue-500";
@@ -306,19 +401,32 @@ export default function MaterialsManager({ initialMaterials }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
           <p className="text-slate-500">Manage materials and supplies</p>
         </div>
-        <button
-          onClick={handleAddNew}
-          disabled={isAddingNew}
-          className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-50"
-        >
-          <Plus size={16} />
-          Add Material
-        </button>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={showRemoved}
+              onChange={() => void toggleShowRemoved()}
+              disabled={isLoading}
+              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            Show removed
+          </label>
+          <button
+            type="button"
+            onClick={handleAddNew}
+            disabled={isAddingNew}
+            className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-50"
+          >
+            <Plus size={16} />
+            Add Material
+          </button>
+        </div>
       </div>
 
       {lowStockCount > 0 && (
@@ -410,10 +518,16 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                 </tr>
               )}
 
-              {materials.map((material) => (
+              {displayMaterials.map((material) => (
                 <tr
                   key={material.id}
-                  className={editingId === material.id ? "bg-blue-50" : "hover:bg-slate-50"}
+                  className={
+                    editingId === material.id
+                      ? "bg-blue-50"
+                      : material.isActive === false
+                        ? "bg-slate-50/90 text-slate-600"
+                        : "hover:bg-slate-50"
+                  }
                 >
                   {editingId === material.id ? (
                     <>
@@ -447,7 +561,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                           onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                           className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          {commonUnits.map((unit) => (
+                          {unitSelectOptions(formData.unit).map((unit) => (
                             <option key={unit} value={unit}>
                               {unit}
                             </option>
@@ -472,6 +586,44 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                             className="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition"
                           >
                             <X size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : material.isActive === false ? (
+                    <>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Package size={16} className="text-slate-400 shrink-0" />
+                          <span className="font-medium">{material.name}</span>
+                          <span className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 bg-slate-200/80 px-1.5 py-0.5 rounded">
+                            Removed
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">{categoryLabel(material.category)}</td>
+                      <td className="px-4 py-3 text-center">{material.unit}</td>
+                      <td className="px-4 py-3 text-center text-sm text-slate-500">
+                        {hasPackageMaterial(material) ? (
+                          <span>
+                            {material.packageAmount}{" "}
+                            {material.packageMeasure === "ML" ? "ml" : "g"} / {material.unit}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-500 text-sm">—</td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRestore(material.id)}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            <RotateCcw size={14} />
+                            Restore
                           </button>
                         </div>
                       </td>
@@ -529,7 +681,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                               disabled={isLoading}
                               className="p-2 text-red-600 hover:bg-red-100 rounded-md transition text-xs font-medium"
                             >
-                              Confirm
+                              Remove
                             </button>
                             <button
                               type="button"
@@ -566,10 +718,12 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                 </tr>
               ))}
 
-              {materials.length === 0 && !isAddingNew && (
+              {displayMaterials.length === 0 && !isAddingNew && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
-                    No materials yet. Click &quot;Add Material&quot; to create one.
+                    {showRemoved
+                      ? "No materials (including removed)."
+                      : "No materials yet. Click \"Add Material\" to create one."}
                   </td>
                 </tr>
               )}

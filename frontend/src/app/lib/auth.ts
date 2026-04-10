@@ -27,9 +27,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.sub = (user as { id: string }).id;
+        token.email = (user as { email: string }).email;
         token.role = (user as { role: string }).role;
         token.branchId = (user as { branchId?: string }).branchId;
         token.branchName = (user as { branchName?: string }).branchName;
+      } else if (token.role === "branch") {
+        // Keep branchId aligned with DB (avoids stale UUIDs after migrate/seed/reset).
+        const { db } = await import("./db");
+        let acc = await db.branchAccount.findUnique({
+          where: { id: token.sub as string },
+          include: { branch: true },
+        });
+        if (!acc && token.email) {
+          acc = await db.branchAccount.findUnique({
+            where: { email: (token.email as string).trim().toLowerCase() },
+            include: { branch: true },
+          });
+        }
+        if (acc) {
+          token.sub = acc.id;
+          token.branchId = acc.branchId;
+          token.branchName = acc.branch.name;
+        } else {
+          token.branchId = undefined;
+          token.branchName = undefined;
+        }
       }
       return token;
     },

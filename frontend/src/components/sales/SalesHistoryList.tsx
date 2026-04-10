@@ -1,9 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight, Package } from "lucide-react";
+import type { PackageMeasure } from "@prisma/client";
 
 import { formatPHP } from "@/src/app/lib/money";
+import {
+  hasPackageMaterial,
+  formatMeasureAbbrev,
+} from "@/src/app/lib/materialPackage";
+import {
+  parseOptionalMaterialsJson,
+  parseOptionalSessionRemarks,
+} from "@/src/app/lib/optionalSessionMaterials";
 
 type SaleService = {
   id: string;
@@ -41,6 +50,7 @@ type Sale = {
     name: string;
   } | null;
   saleServices: SaleService[];
+  optionalMaterials?: unknown;
 };
 
 type Props = {
@@ -79,6 +89,22 @@ function formatStartedDate(dateStr: Date) {
   if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${timeStr}`;
   
   return date.toLocaleDateString([], { month: "short", day: "numeric" }) + ` at ${timeStr}`;
+}
+
+function formatUsageQuantity(
+  quantity: number,
+  material: {
+    unit: string;
+    packageAmount: number | null;
+    packageMeasure: PackageMeasure | null;
+  }
+): string {
+  if (hasPackageMaterial(material)) {
+    const q = quantity % 1 === 0 ? String(quantity) : quantity.toFixed(1);
+    return `${q} ${formatMeasureAbbrev(material.packageMeasure!)}`;
+  }
+  const q = quantity % 1 === 0 ? String(quantity) : quantity.toFixed(2);
+  return `${q} ${material.unit}`;
 }
 
 function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
@@ -216,6 +242,46 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
               );
             })}
           </div>
+
+          {/* Session "Materials used (optional)" — recipe deductions stay in DB for stock only */}
+          {(() => {
+            const optionalRows = parseOptionalMaterialsJson(sale.optionalMaterials);
+            const optRemarks = parseOptionalSessionRemarks(sale.optionalMaterials).trim();
+            if (optionalRows.length === 0 && optRemarks.length === 0) return null;
+
+            return (
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <Package size={16} className="text-slate-500 shrink-0" />
+                  Materials used
+                </div>
+                <div className="rounded-md bg-emerald-50/50 border border-emerald-100 px-3 py-2 space-y-2">
+                  {optRemarks.length > 0 && (
+                    <p className="text-xs text-slate-700 whitespace-pre-wrap">{optRemarks}</p>
+                  )}
+                  {optionalRows.length > 0 && (
+                    <ul className="space-y-1">
+                      {optionalRows.map((row) => (
+                        <li
+                          key={row.materialId}
+                          className="flex justify-between gap-2 text-sm text-slate-700"
+                        >
+                          <span className="truncate font-medium">{row.name}</span>
+                          <span className="tabular-nums shrink-0 text-slate-600">
+                            {formatUsageQuantity(row.quantity, {
+                              unit: row.unit,
+                              packageAmount: row.packageAmount ?? null,
+                              packageMeasure: row.packageMeasure ?? null,
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Totals */}
           <div className="border-t border-slate-300 pt-3 space-y-1 text-sm">

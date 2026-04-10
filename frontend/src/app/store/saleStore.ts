@@ -3,6 +3,11 @@ import type { PackageMeasure } from "@prisma/client";
 import { useToastStore } from "./toastStore";
 import { WALK_IN_CUSTOMER_ID, WALK_IN_CUSTOMER_NAME } from "@/src/app/lib/walkInCustomer";
 import { minSaleMaterialQuantity } from "@/src/app/lib/materialPackage";
+import {
+  parseOptionalMaterialsJson,
+  parseOptionalSessionRemarks,
+  serializeOptionalMaterialsForApi,
+} from "@/src/app/lib/optionalSessionMaterials";
 
 // Material used in a draft sale item
 export type DraftMaterial = {
@@ -27,6 +32,8 @@ export type ColoringDetails = {
 export type DraftSaleItem = {
   id: string;
   serviceId: string;
+  /** From Service.category — used to hide per-line recipe UI for hair coloring */
+  serviceCategory?: string | null;
   name: string;
   price: number;
   qty: number;
@@ -54,6 +61,10 @@ export type DraftSale = {
   status: DraftStatus;
   isPaid: boolean;
   items: DraftSaleItem[];
+  /** Optional extras for this visit (persisted on Sale.optionalMaterials JSON) */
+  optionalSessionMaterials: DraftMaterial[];
+  /** Session notes (same JSON field as optional materials) */
+  optionalSessionRemarks: string;
   subtotal: number;
   total: number;
   createdAt: string;
@@ -108,6 +119,7 @@ type SaleStore = {
     draftId: string,
     item: {
       serviceId: string;
+      serviceCategory?: string | null;
       name: string;
       price: number;
       qty: number;
@@ -124,6 +136,19 @@ type SaleStore = {
     materialId: string,
     quantity: number
   ) => void;
+
+  /** Replace optional session materials + remarks (from modal or clear) */
+  setOptionalSessionMaterials: (
+    draftId: string,
+    materials: DraftMaterial[],
+    remarks?: string
+  ) => void;
+  adjustOptionalSessionMaterial: (
+    draftId: string,
+    materialId: string,
+    quantity: number
+  ) => void;
+  removeOptionalSessionMaterial: (draftId: string, materialId: string) => void;
 
   // Checkout
   checkoutDraft: (draftId: string, cashReceived?: number) => Promise<boolean>;
@@ -150,6 +175,7 @@ function dbSessionToDraft(session: any): DraftSale {
       return {
         id: ss.id,
         serviceId: ss.serviceId,
+        serviceCategory: ss.service?.category ?? null,
         name: displayName,
         price: ss.price,
         qty: ss.qty,
@@ -197,6 +223,8 @@ function dbSessionToDraft(session: any): DraftSale {
     status: "active",
     isPaid: false,
     items,
+    optionalSessionMaterials: parseOptionalMaterialsJson(session.optionalMaterials),
+    optionalSessionRemarks: parseOptionalSessionRemarks(session.optionalMaterials),
     subtotal,
     total: subtotal,
     createdAt: session.createdAt,
@@ -515,6 +543,7 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
       const newItem: DraftSaleItem = {
         id: tempId,
         serviceId: item.serviceId,
+        serviceCategory: item.serviceCategory ?? null,
         name: item.name,
         price: item.price,
         qty: item.qty,
@@ -623,6 +652,108 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quantity }),
+      });
+    });
+  },
+
+  setOptionalSessionMaterials: (draftId, materials, remarks) => {
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+      const prev = state.draftSales[draftIndex];
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = {
+        ...prev,
+        optionalSessionMaterials: materials,
+        optionalSessionRemarks:
+          remarks !== undefined ? remarks : prev.optionalSessionRemarks,
+      };
+      return { draftSales: updatedDrafts };
+    });
+
+    queueSave(draftId, async () => {
+      const draft = get().draftSales.find((d) => d.id === draftId);
+      if (!draft) return;
+      await fetch(`/api/sessions/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          optionalMaterials: serializeOptionalMaterialsForApi(
+            draft.optionalSessionMaterials ?? [],
+            draft.optionalSessionRemarks ?? ""
+          ),
+        }),
+      });
+    });
+  },
+
+  adjustOptionalSessionMaterial: (draftId, materialId, quantity) => {
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+
+      const draft = state.draftSales[draftIndex];
+      const list = draft.optionalSessionMaterials ?? [];
+      const updatedOptional = list.map((m) => {
+        if (m.materialId !== materialId) return m;
+        const minQ = minSaleMaterialQuantity(m);
+        return { ...m, quantity: Math.max(minQ, quantity) };
+      });
+
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = {
+        ...draft,
+        optionalSessionMaterials: updatedOptional,
+      };
+      return { draftSales: updatedDrafts };
+    });
+
+    queueSave(draftId, async () => {
+      const draft = get().draftSales.find((d) => d.id === draftId);
+      if (!draft) return;
+      await fetch(`/api/sessions/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          optionalMaterials: serializeOptionalMaterialsForApi(
+            draft.optionalSessionMaterials ?? [],
+            draft.optionalSessionRemarks ?? ""
+          ),
+        }),
+      });
+    });
+  },
+
+  removeOptionalSessionMaterial: (draftId, materialId) => {
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+
+      const draft = state.draftSales[draftIndex];
+      const updatedOptional = (draft.optionalSessionMaterials ?? []).filter(
+        (m) => m.materialId !== materialId
+      );
+
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = {
+        ...draft,
+        optionalSessionMaterials: updatedOptional,
+      };
+      return { draftSales: updatedDrafts };
+    });
+
+    queueSave(draftId, async () => {
+      const draft = get().draftSales.find((d) => d.id === draftId);
+      if (!draft) return;
+      await fetch(`/api/sessions/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          optionalMaterials: serializeOptionalMaterialsForApi(
+            draft.optionalSessionMaterials ?? [],
+            draft.optionalSessionRemarks ?? ""
+          ),
+        }),
       });
     });
   },
