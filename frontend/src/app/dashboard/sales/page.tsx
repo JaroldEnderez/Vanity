@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import SalesChartLoader from "@/src/components/charts/SalesChartLoader";
 import SalesHistoryList from "@/src/components/sales/SalesHistoryList";
+import SalesExportButton from "@/src/components/sales/SalesExportButton";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
 
@@ -80,6 +81,10 @@ export default function SalesHistoryPage() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [visibleServiceCount, setVisibleServiceCount] = useState(5);
+  const [exportStaffId, setExportStaffId] = useState("");
+  const [exportServiceId, setExportServiceId] = useState("");
+  const [staffOptions, setStaffOptions] = useState<{ id: string; name: string }[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<{ id: string; name: string }[]>([]);
 
   const dateRange = useMemo(() => {
     if (quickFilter !== "custom") return getDateRangeForQuickFilter(quickFilter);
@@ -97,10 +102,64 @@ export default function SalesHistoryPage() {
     return { start, end }; 
   }, [quickFilter, customStart, customEnd]);
 
+  const rangeStartMs = dateRange.start.getTime();
+  const rangeEndMs = dateRange.end.getTime();
+
   // Reset "top services" to the default view when the date range changes.
   useEffect(() => {
     setVisibleServiceCount(5);
-  }, [dateRange.start.getTime(), dateRange.end.getTime()]);
+  }, [rangeStartMs, rangeEndMs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [staffRes, serviceRes] = await Promise.all([
+          fetch("/api/staff"),
+          fetch("/api/services"),
+        ]);
+        if (!staffRes.ok || !serviceRes.ok) return;
+        const staffJson: unknown = await staffRes.json();
+        const serviceJson: unknown = await serviceRes.json();
+        if (cancelled) return;
+        if (Array.isArray(staffJson)) {
+          setStaffOptions(
+            staffJson
+              .filter(
+                (s): s is { id: string; name: string } =>
+                  typeof s === "object" &&
+                  s !== null &&
+                  "id" in s &&
+                  "name" in s &&
+                  typeof (s as { id: unknown }).id === "string" &&
+                  typeof (s as { name: unknown }).name === "string"
+              )
+              .map((s) => ({ id: s.id, name: s.name }))
+          );
+        }
+        if (Array.isArray(serviceJson)) {
+          setServiceOptions(
+            serviceJson
+              .filter(
+                (s): s is { id: string; name: string } =>
+                  typeof s === "object" &&
+                  s !== null &&
+                  "id" in s &&
+                  "name" in s &&
+                  typeof (s as { id: unknown }).id === "string" &&
+                  typeof (s as { name: unknown }).name === "string"
+              )
+              .map((s) => ({ id: s.id, name: s.name }))
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadSales = useCallback(async (start: Date, end: Date) => {
     setLoading(true);
@@ -288,6 +347,45 @@ export default function SalesHistoryPage() {
           </label>
         </div>
       )}
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm text-slate-600">
+          <span className="block mb-1">Staff (export)</span>
+          <select
+            value={exportStaffId}
+            onChange={(e) => setExportStaffId(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[10rem]"
+          >
+            <option value="">All staff</option>
+            {staffOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-slate-600">
+          <span className="block mb-1">Service (export)</span>
+          <select
+            value={exportServiceId}
+            onChange={(e) => setExportServiceId(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[10rem]"
+          >
+            <option value="">All services</option>
+            {serviceOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <SalesExportButton
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          staffId={exportStaffId || undefined}
+          serviceId={exportServiceId || undefined}
+        />
+      </div>
 
       <section className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <button
