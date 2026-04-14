@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, X, Users } from "lucide-react";
 import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
+import CustomersExportButton from "@/src/components/customers/CustomersExportButton";
 
 export type CustomerRow = {
   id: string;
@@ -171,13 +172,16 @@ export default function CustomersManager() {
           <Users size={22} />
           Customers
         </h1>
-        <button
-          onClick={handleAddNew}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium text-sm"
-        >
-          <Plus size={18} />
-          Add customer
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {!loading && customers.length > 0 && <CustomersExportButton />}
+          <button
+            onClick={handleAddNew}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium text-sm"
+          >
+            <Plus size={18} />
+            Add customer
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -222,7 +226,7 @@ export default function CustomersManager() {
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Fb</label>
+              <label className="block text-sm text-slate-600 mb-1">Facebook</label>
               <input
                 type="text"
                 value={formData.fb}
@@ -276,7 +280,7 @@ export default function CustomersManager() {
                   <th className="text-left py-3 px-4 font-medium text-slate-700">Name</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-700">Address</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-700">Contact</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Fb</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-700">Facebook</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-700">Date of birth</th>
                   <th className="text-right py-3 px-4 font-medium text-slate-700">Actions</th>
                 </tr>
