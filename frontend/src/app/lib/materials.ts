@@ -1,5 +1,7 @@
 import { type MaterialCategory, type PackageMeasure } from "@prisma/client";
 
+import type { MaterialImportParsedRow } from "@/src/app/lib/materialsImport";
+
 import { db, interactiveTxOptions } from "./db";
 import { materialStockIsLow, normalizePackageInput } from "./materialPackage";
 
@@ -26,6 +28,7 @@ export async function createMaterial(data: {
   category?: MaterialCategory;
   packageAmount?: number | null;
   packageMeasure?: PackageMeasure | null;
+  sku?: string | null;
 }) {
   const pkg = normalizePackageInput(
     data.packageAmount ?? null,
@@ -33,6 +36,7 @@ export async function createMaterial(data: {
   );
   return db.material.create({
     data: {
+      sku: data.sku?.trim() || null,
       name: data.name,
       unit: data.unit,
       stock: data.stock,
@@ -55,6 +59,7 @@ export async function updateMaterial(
     packageAmount: number | null;
     packageMeasure: PackageMeasure | null;
     isActive: boolean;
+    sku: string | null;
   }>
 ) {
   const { packageAmount, packageMeasure, ...rest } = data;
@@ -161,6 +166,68 @@ export async function setServiceMaterials(
       where: { serviceId },
       include: { material: true },
     });
+  }, interactiveTxOptions);
+}
+
+/** Upsert materials from validated CSV rows (sku key). Logs inventory movements for stock changes. */
+export async function importMaterialsFromParsedRows(rows: MaterialImportParsedRow[]) {
+  return db.$transaction(async (tx) => {
+    let created = 0;
+    let updated = 0;
+
+    for (const r of rows) {
+      const pkg = normalizePackageInput(r.packageAmount, r.packageMeasure);
+      const existing = await tx.material.findUnique({
+        where: { sku: r.sku },
+      });
+
+      const base = {
+        name: r.name,
+        unit: r.packaging,
+        stock: r.computedStock,
+        category: r.category,
+        packageAmount: pkg.packageAmount,
+        packageMeasure: pkg.packageMeasure,
+        isActive: true,
+      };
+
+      if (!existing) {
+        const m = await tx.material.create({
+          data: { ...base, sku: r.sku },
+        });
+        created++;
+        if (m.stock > 0) {
+          await tx.inventoryMovement.create({
+            data: {
+              materialId: m.id,
+              quantity: m.stock,
+              type: "IN",
+              referenceId: "csv-import",
+            },
+          });
+        }
+      } else {
+        const oldStock = existing.stock;
+        await tx.material.update({
+          where: { id: existing.id },
+          data: base,
+        });
+        updated++;
+        const delta = base.stock - oldStock;
+        if (delta !== 0) {
+          await tx.inventoryMovement.create({
+            data: {
+              materialId: existing.id,
+              quantity: delta,
+              type: "ADJUSTMENT",
+              referenceId: "csv-import",
+            },
+          });
+        }
+      }
+    }
+
+    return { created, updated };
   }, interactiveTxOptions);
 }
 

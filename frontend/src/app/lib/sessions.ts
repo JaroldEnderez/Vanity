@@ -25,6 +25,7 @@ const sessionInclude = {
           id: true,
           name: true,
           category: true,
+          hairColoringFlow: true,
           price: true,
           durationMin: true,
           materials: {

@@ -24,7 +24,7 @@ import {
   formatMeasureAbbrev,
   minSaleMaterialQuantity,
 } from "@/src/app/lib/materialPackage";
-import { isHairColoringCategory } from "@/src/app/types/service";
+import { isHairColoringLineItem } from "@/src/app/types/service";
 
 // Staff type for dropdown
 type Staff = {
@@ -521,7 +521,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                     {/* Per-line recipe materials (hair coloring: hidden here; recipe still applies at checkout — extras go in "Materials used (optional)") */}
                     {item.materials &&
                       item.materials.length > 0 &&
-                      !isHairColoringCategory(item.serviceCategory) && (
+                      !isHairColoringLineItem(item) && (
                       <div className="mt-2 pt-2 border-t border-slate-200">
                         <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
                           <Package size={12} />

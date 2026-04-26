@@ -19,7 +19,7 @@ export type DraftMaterial = {
   packageMeasure?: PackageMeasure | null;
 };
 
-// Hair Coloring extra details (only for services in Hair_coloring category)
+// Hair coloring line details (only when Service.hairColoringFlow is true)
 export type ColoringDetails = {
   serviceDisplayName?: string;
   colorUsed?: string;
@@ -32,8 +32,9 @@ export type ColoringDetails = {
 export type DraftSaleItem = {
   id: string;
   serviceId: string;
-  /** From Service.category — used to hide per-line recipe UI for hair coloring */
+  /** From Service.category (legacy strings possible on old drafts) */
   serviceCategory?: string | null;
+  hairColoringFlow?: boolean | null;
   name: string;
   price: number;
   qty: number;
@@ -120,6 +121,7 @@ type SaleStore = {
     item: {
       serviceId: string;
       serviceCategory?: string | null;
+      hairColoringFlow?: boolean | null;
       name: string;
       price: number;
       qty: number;
@@ -176,6 +178,7 @@ function dbSessionToDraft(session: any): DraftSale {
         id: ss.id,
         serviceId: ss.serviceId,
         serviceCategory: ss.service?.category ?? null,
+        hairColoringFlow: ss.service?.hairColoringFlow ?? null,
         name: displayName,
         price: ss.price,
         qty: ss.qty,
@@ -544,6 +547,7 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         id: tempId,
         serviceId: item.serviceId,
         serviceCategory: item.serviceCategory ?? null,
+        hairColoringFlow: item.hairColoringFlow ?? null,
         name: item.name,
         price: item.price,
         qty: item.qty,

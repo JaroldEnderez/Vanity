@@ -1,7 +1,7 @@
 "use client";
 
 import type { MaterialCategory, PackageMeasure } from "@prisma/client";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Plus,
   Pencil,
@@ -11,6 +11,8 @@ import {
   Package,
   AlertTriangle,
   RotateCcw,
+  Upload,
+  FileDown,
 } from "lucide-react";
 import {
   formatStockDisplayText,
@@ -20,6 +22,7 @@ import {
 
 type Material = {
   id: string;
+  sku?: string | null;
   name: string;
   unit: string;
   stock: number;
@@ -134,6 +137,13 @@ export default function MaterialsManager({ initialMaterials }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showRemoved, setShowRemoved] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importBanner, setImportBanner] = useState<{
+    type: "ok" | "err";
+    title: string;
+    detail?: string;
+  } | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const displayMaterials = useMemo(() => {
     if (showRemoved) return materials;
@@ -297,6 +307,83 @@ export default function MaterialsManager({ initialMaterials }: Props) {
     (m) => m.isActive !== false && materialStockSeverity(m) !== "ok"
   ).length;
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setImportBusy(true);
+    setImportBanner(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/materials/import", {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+
+      if (!res.ok) {
+        let detail = "";
+        if (typeof data.error === "string") {
+          detail = data.error;
+        }
+        if (data.code === "INVALID_HEADERS") {
+          const missing = Array.isArray(data.missing) ? data.missing.join(", ") : "";
+          const unknown = Array.isArray(data.unknown) ? data.unknown.join(", ") : "";
+          detail = [
+            detail,
+            missing && `Missing columns: ${missing}`,
+            unknown && `Unknown columns: ${unknown}`,
+          ]
+            .filter(Boolean)
+            .join(" ");
+        }
+        const rowErrors = data.rowErrors as { row: number; message: string }[] | undefined;
+        if (rowErrors?.length) {
+          detail +=
+            (detail ? "\n\n" : "") +
+            rowErrors
+              .slice(0, 15)
+              .map((r) => `Row ${r.row}: ${r.message}`)
+              .join("\n");
+          const extra = data.rowErrorTruncated as number | undefined;
+          if (extra && extra > 0) detail += `\n… and ${extra} more errors`;
+        }
+        setImportBanner({
+          type: "err",
+          title: "Import failed",
+          detail: detail || "Request failed",
+        });
+        return;
+      }
+
+      const created = typeof data.created === "number" ? data.created : 0;
+      const updated = typeof data.updated === "number" ? data.updated : 0;
+      setImportBanner({
+        type: "ok",
+        title: `Import complete: ${created} created, ${updated} updated.`,
+      });
+
+      const listRes = await fetch(
+        `/api/materials${showRemoved ? "?includeInactive=1" : ""}`
+      );
+      if (listRes.ok) {
+        const listData: unknown = await listRes.json();
+        setMaterials(Array.isArray(listData) ? (listData as Material[]) : []);
+      }
+    } catch (err) {
+      console.error(err);
+      setImportBanner({
+        type: "err",
+        title: "Import failed",
+        detail: err instanceof Error ? err.message : "Network error",
+      });
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const handleRestore = async (id: string) => {
     setIsLoading(true);
     try {
@@ -417,6 +504,29 @@ export default function MaterialsManager({ initialMaterials }: Props) {
             />
             Show removed
           </label>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => void handleImportFile(e)}
+          />
+          <a
+            href="/api/materials/import"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50 transition"
+          >
+            <FileDown size={16} />
+            CSV template
+          </a>
+          <button
+            type="button"
+            onClick={() => importFileRef.current?.click()}
+            disabled={importBusy || isAddingNew}
+            className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 text-slate-800 rounded-md hover:bg-slate-50 transition disabled:opacity-50"
+          >
+            <Upload size={16} />
+            {importBusy ? "Importing…" : "Import CSV"}
+          </button>
           <button
             type="button"
             onClick={handleAddNew}
@@ -429,6 +539,22 @@ export default function MaterialsManager({ initialMaterials }: Props) {
         </div>
       </div>
 
+      {importBanner && (
+        <div
+          role="alert"
+          className={
+            importBanner.type === "ok"
+              ? "rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 whitespace-pre-wrap"
+              : "rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 whitespace-pre-wrap"
+          }
+        >
+          <div className="font-medium">{importBanner.title}</div>
+          {importBanner.detail && (
+            <div className="mt-1 text-slate-700">{importBanner.detail}</div>
+          )}
+        </div>
+      )}
+
       {lowStockCount > 0 && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
           <AlertTriangle size={18} />
@@ -440,9 +566,10 @@ export default function MaterialsManager({ initialMaterials }: Props) {
 
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px]">
+          <table className="w-full min-w-[980px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 w-[7rem]">SKU</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Material Name</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 min-w-[11rem]">Type</th>
                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Unit</th>
@@ -456,6 +583,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
             <tbody className="divide-y divide-slate-200">
               {isAddingNew && (
                 <tr className="bg-emerald-50">
+                  <td className="px-4 py-3 text-slate-400 text-sm">—</td>
                   <td className="px-4 py-3">
                     <input
                       type="text"
@@ -531,6 +659,9 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                 >
                   {editingId === material.id ? (
                     <>
+                      <td className="px-4 py-3 text-slate-600 text-sm max-w-[7rem] truncate" title={material.sku ?? undefined}>
+                        {material.sku ?? "—"}
+                      </td>
                       <td className="px-4 py-3">
                         <input
                           type="text"
@@ -592,6 +723,9 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                     </>
                   ) : material.isActive === false ? (
                     <>
+                      <td className="px-4 py-3 text-slate-600 text-sm max-w-[7rem] truncate" title={material.sku ?? undefined}>
+                        {material.sku ?? "—"}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Package size={16} className="text-slate-400 shrink-0" />
@@ -630,6 +764,9 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                     </>
                   ) : (
                     <>
+                      <td className="px-4 py-3 text-slate-600 text-sm max-w-[7rem] truncate" title={material.sku ?? undefined}>
+                        {material.sku ?? "—"}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Package size={16} className="text-slate-400" />
@@ -720,7 +857,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
 
               {displayMaterials.length === 0 && !isAddingNew && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
                     {showRemoved
                       ? "No materials (including removed)."
                       : "No materials yet. Click \"Add Material\" to create one."}
