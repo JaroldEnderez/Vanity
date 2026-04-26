@@ -1,7 +1,7 @@
 import "./load-env";
 import { db } from "@/src/app/lib/db";
 import bcrypt from "bcryptjs";
-import { SaleStatus } from "@prisma/client";
+import { SaleStatus, type ServiceCategory } from "@prisma/client";
 import { WALK_IN_CUSTOMER_ID, WALK_IN_CUSTOMER_NAME } from "@/src/app/lib/walkInCustomer";
 
 // Helper to create or find branch account
@@ -273,19 +273,25 @@ async function main(){
 
     console.log("Seeding services...")
 
-    const services = [
-        { name: "Haircut", category: "default" as const, price: 250, durationMin: 30 },
-        { name: "Hair Coloring", category: "Hair_coloring" as const, price: 1500, durationMin: 120 },
-        { name: "Full Hair Color", category: "Hair_coloring" as const, price: 1800, durationMin: 150 },
-        { name: "Balayage", category: "Hair_coloring" as const, price: 2500, durationMin: 180 },
-        { name: "Hair Spa", category: "default" as const, price: 800, durationMin: 90 },
-        { name: "Keratin Treatment", category: "default" as const, price: 3500, durationMin: 120 },
-        { name: "Rebond", category: "default" as const, price: 4000, durationMin: 240 },
-        { name: "Perm", category: "default" as const, price: 1200, durationMin: 90 },
-        { name: "Blow Dry & Styling", category: "default" as const, price: 400, durationMin: 45 },
-        { name: "Manicure", category: "default" as const, price: 300, durationMin: 45 },
-        { name: "Pedicure", category: "default" as const, price: 350, durationMin: 60 },
-        { name: "Gel Nails", category: "default" as const, price: 600, durationMin: 60 },
+    const services: {
+        name: string;
+        category: ServiceCategory;
+        hairColoringFlow: boolean;
+        price: number;
+        durationMin: number;
+    }[] = [
+        { name: "Haircut", category: "HAIR", hairColoringFlow: false, price: 250, durationMin: 30 },
+        { name: "Hair Coloring", category: "HAIR", hairColoringFlow: true, price: 1500, durationMin: 120 },
+        { name: "Full Hair Color", category: "HAIR", hairColoringFlow: true, price: 1800, durationMin: 150 },
+        { name: "Balayage", category: "HAIR", hairColoringFlow: true, price: 2500, durationMin: 180 },
+        { name: "Hair Spa", category: "SPA", hairColoringFlow: false, price: 800, durationMin: 90 },
+        { name: "Keratin Treatment", category: "HAIR", hairColoringFlow: false, price: 3500, durationMin: 120 },
+        { name: "Rebond", category: "HAIR", hairColoringFlow: false, price: 4000, durationMin: 240 },
+        { name: "Perm", category: "HAIR", hairColoringFlow: false, price: 1200, durationMin: 90 },
+        { name: "Blow Dry & Styling", category: "HAIR", hairColoringFlow: false, price: 400, durationMin: 45 },
+        { name: "Manicure", category: "NAILS", hairColoringFlow: false, price: 300, durationMin: 45 },
+        { name: "Pedicure", category: "NAILS", hairColoringFlow: false, price: 350, durationMin: 60 },
+        { name: "Gel Nails", category: "NAILS", hairColoringFlow: false, price: 600, durationMin: 60 },
     ];
 
     for (const service of services) {
@@ -300,7 +306,10 @@ async function main(){
         } else {
             await db.service.update({
                 where: { id: existing.id },
-                data: { category: service.category },
+                data: {
+                    category: service.category,
+                    hairColoringFlow: service.hairColoringFlow,
+                },
             });
         }
     }

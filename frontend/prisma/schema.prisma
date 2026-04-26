@@ -56,7 +56,9 @@ model Staff {
 model Service {
   id            String            @id @default(uuid())
   name          String            @unique
-  category      String            @default("default")
+  category      ServiceCategory   @default(HAIR)
+  /// When true, POS uses the hair coloring line UI (color, developer, hide per-line recipe list).
+  hairColoringFlow Boolean        @default(false)
   description   String?
   durationMin   Int?
   price         Float
@@ -75,6 +77,8 @@ model Service {
 
 model Material {
   id                 String              @id @default(uuid())
+  /// Stable import / catalog key; upsert CSV imports match on this when set.
+  sku                String?             @unique
   name               String
   brand              String?
   productName        String?
@@ -91,6 +95,15 @@ model Material {
   inventoryMovements InventoryMovement[]
   saleMaterials      SaleMaterial[]
   serviceMaterials   ServiceMaterial[]
+}
+
+enum ServiceCategory {
+  HAIR
+  NAILS
+  SPA
+  MASSAGE
+  LASHES
+  AESTHETICS
 }
 
 enum MaterialCategory {
@@ -177,7 +190,7 @@ model SaleService {
   qty       Int      @default(1)
   price     Float    // unit price at time of sale
 
-  // Hair Coloring extra fields (only used when service category is Hair_coloring)
+  // Hair coloring line fields (only used when Service.hairColoringFlow is true)
   serviceDisplayName String?  // e.g. "Full Hair Color"
   colorUsed          String?
   developer          String?  // e.g. "30 Volume"

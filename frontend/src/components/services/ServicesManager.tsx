@@ -13,6 +13,7 @@ type Service = {
   id: string;
   name: string;
   category?: string;
+  hairColoringFlow?: boolean;
   description: string | null;
   durationMin: number | null;
   price: number;
@@ -27,6 +28,7 @@ type Props = {
 type ServiceForm = {
   name: string;
   category: string;
+  hairColoringFlow: boolean;
   description: string;
   durationMin: number;
   price: number;
@@ -35,6 +37,7 @@ type ServiceForm = {
 const emptyForm: ServiceForm = {
   name: "",
   category: DEFAULT_SERVICE_CATEGORY,
+  hairColoringFlow: false,
   description: "",
   durationMin: 30,
   price: 0,
@@ -67,6 +70,7 @@ export default function ServicesManager({ initialServices }: Props) {
     setFormData({
       name: service.name,
       category: service.category || DEFAULT_SERVICE_CATEGORY,
+      hairColoringFlow: service.hairColoringFlow ?? false,
       description: service.description || "",
       durationMin: service.durationMin || 30,
       price: service.price,
@@ -215,10 +219,17 @@ export default function ServicesManager({ initialServices }: Props) {
                     autoFocus
                   />
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-top">
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) => {
+                      const category = e.target.value;
+                      setFormData({
+                        ...formData,
+                        category,
+                        hairColoringFlow: category === "HAIR" ? formData.hairColoringFlow : false,
+                      });
+                    }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     {SERVICE_CATEGORIES.map((category) => (
@@ -227,6 +238,19 @@ export default function ServicesManager({ initialServices }: Props) {
                       </option>
                     ))}
                   </select>
+                  {formData.category === "HAIR" && (
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={formData.hairColoringFlow}
+                        onChange={(e) =>
+                          setFormData({ ...formData, hairColoringFlow: e.target.checked })
+                        }
+                        className="mt-0.5 rounded border-slate-300"
+                      />
+                      <span>Hair coloring line (color / developer)</span>
+                    </label>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <input
@@ -331,10 +355,17 @@ export default function ServicesManager({ initialServices }: Props) {
                         autoFocus
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 align-top">
                       <select
                         value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        onChange={(e) => {
+                          const category = e.target.value;
+                          setFormData({
+                            ...formData,
+                            category,
+                            hairColoringFlow: category === "HAIR" ? formData.hairColoringFlow : false,
+                          });
+                        }}
                         className="w-full min-w-[8rem] px-3 py-2 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {SERVICE_CATEGORIES.map((category) => (
@@ -343,6 +374,19 @@ export default function ServicesManager({ initialServices }: Props) {
                           </option>
                         ))}
                       </select>
+                      {formData.category === "HAIR" && (
+                        <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={formData.hairColoringFlow}
+                            onChange={(e) =>
+                              setFormData({ ...formData, hairColoringFlow: e.target.checked })
+                            }
+                            className="mt-0.5 rounded border-slate-300"
+                          />
+                          <span>Hair coloring line (color / developer)</span>
+                        </label>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <input
@@ -404,6 +448,9 @@ export default function ServicesManager({ initialServices }: Props) {
                     </td>
                     <td className="px-4 py-3 text-slate-600 text-sm">
                       {labelServiceCategory(service.category)}
+                      {service.hairColoringFlow ? (
+                        <span className="block text-xs text-slate-400">Coloring line</span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {service.description || <span className="text-slate-400 italic">No description</span>}

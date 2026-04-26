@@ -46,21 +46,16 @@ export default function ServicesSection({ services, staffId }: Props) {
   const [isCreating, setIsCreating] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
 
-  const orderedServices = useMemo(
-    () => [...services].sort((a, b) => a.name.localeCompare(b.name)),
-    [services]
-  );
-
   const filteredServices = useMemo(() => {
     const q = serviceSearch.trim().toLowerCase();
-    if (!q) return orderedServices;
-    return orderedServices.filter((s) => {
+    if (!q) return [...services];
+    return services.filter((s) => {
       if (s.name.toLowerCase().includes(q)) return true;
       if (s.description?.toLowerCase().includes(q)) return true;
       if (labelServiceCategory(s.category).toLowerCase().includes(q)) return true;
       return false;
     });
-  }, [orderedServices, serviceSearch]);
+  }, [services, serviceSearch]);
 
   const fetchServiceMaterials = useCallback(async (serviceId: string): Promise<DraftMaterial[]> => {
     const cached = materialsCache.current.get(serviceId);
@@ -95,6 +90,7 @@ export default function ServicesSection({ services, staffId }: Props) {
             addItemToDraft(newDraft.id, {
               serviceId: service.id,
               serviceCategory: service.category ?? null,
+              hairColoringFlow: service.hairColoringFlow ?? null,
               name: service.name,
               price: service.price,
               qty: 1,
@@ -114,6 +110,7 @@ export default function ServicesSection({ services, staffId }: Props) {
       addItemToDraft(activeDraft.id, {
         serviceId: service.id,
         serviceCategory: service.category ?? null,
+        hairColoringFlow: service.hairColoringFlow ?? null,
         name: service.name,
         price: service.price,
         qty: 1,

@@ -1,9 +1,16 @@
-import { db } from "./db";
-import { DEFAULT_SERVICE_CATEGORY, HAIR_COLORING_CATEGORY } from "@/src/app/types/service";
+import type { Prisma, ServiceCategory } from "@prisma/client";
 
-function normalizeServiceCategory(category: string | undefined | null): string {
-  if (category === HAIR_COLORING_CATEGORY || category === "Hair_Coloring") return HAIR_COLORING_CATEGORY;
-  return DEFAULT_SERVICE_CATEGORY;
+import { db } from "./db";
+import { SERVICE_CATEGORIES } from "@/src/app/types/service";
+
+const VALID_CATEGORY = new Set<string>(SERVICE_CATEGORIES);
+
+function normalizeServiceCategory(input: string | undefined | null): ServiceCategory {
+  if (!input) return "HAIR";
+  const t = input.trim();
+  if (VALID_CATEGORY.has(t)) return t as ServiceCategory;
+  if (t === "Hair_coloring" || t === "Hair_Coloring" || t === "default") return "HAIR";
+  return "HAIR";
 }
 
 export async function getAllServices() {
@@ -23,18 +30,18 @@ export async function getServices(branchId?: string) {
     where: {
       isActive: true,
       // Show services that belong to this branch OR are shared (no branchId)
-      ...(branchId ? {
-        OR: [
-          { branchId },
-          { branchId: null },
-        ],
-      } : {}),
+      ...(branchId
+        ? {
+            OR: [{ branchId }, { branchId: null }],
+          }
+        : {}),
     },
     orderBy: { name: "asc" },
     select: {
       id: true,
       name: true,
       category: true,
+      hairColoringFlow: true,
       description: true,
       durationMin: true,
       price: true,
@@ -83,17 +90,19 @@ export async function getServiceById(id: string) {
 export async function createService(data: {
   name: string;
   category?: string;
+  hairColoringFlow?: boolean;
   description?: string;
   durationMin: number;
   price: number;
   branchId?: string;
   isActive?: boolean;
 }) {
-  const { category, ...rest } = data;
+  const { category, hairColoringFlow, ...rest } = data;
   return db.service.create({
     data: {
       ...rest,
       category: normalizeServiceCategory(category),
+      hairColoringFlow: hairColoringFlow ?? false,
     },
   });
 }
@@ -103,6 +112,7 @@ export async function updateService(
   data: Partial<{
     name: string;
     category: string;
+    hairColoringFlow: boolean;
     description: string;
     durationMin: number;
     price: number;
@@ -110,10 +120,15 @@ export async function updateService(
     isActive: boolean;
   }>
 ) {
-  const next = { ...data };
-  if (data.category !== undefined) {
-    next.category = normalizeServiceCategory(data.category);
-  }
+  const next: Prisma.ServiceUncheckedUpdateInput = {};
+  if (data.name !== undefined) next.name = data.name;
+  if (data.description !== undefined) next.description = data.description;
+  if (data.durationMin !== undefined) next.durationMin = data.durationMin;
+  if (data.price !== undefined) next.price = data.price;
+  if (data.branchId !== undefined) next.branchId = data.branchId;
+  if (data.isActive !== undefined) next.isActive = data.isActive;
+  if (data.hairColoringFlow !== undefined) next.hairColoringFlow = data.hairColoringFlow;
+  if (data.category !== undefined) next.category = normalizeServiceCategory(data.category);
   return db.service.update({
     where: { id },
     data: next,
