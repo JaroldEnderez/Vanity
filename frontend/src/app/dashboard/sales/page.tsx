@@ -9,6 +9,11 @@ import { formatPHP } from "@/src/app/lib/money";
 
 type QuickFilter = "today" | "last7" | "last30" | "thisYear" | "allTime" | "custom";
 
+type ExpenseBrief = {
+  id: string;
+  amount: number;
+};
+
 type Sale = {
   id: string;
   name: string | null;
@@ -77,6 +82,7 @@ export default function SalesHistoryPage() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("last7");
   const [chartOpen, setChartOpen] = useState(true);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [rangeExpenses, setRangeExpenses] = useState<ExpenseBrief[]>([]);
   const [loading, setLoading] = useState(true);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -163,16 +169,41 @@ export default function SalesHistoryPage() {
 
   const loadSales = useCallback(async (start: Date, end: Date) => {
     setLoading(true);
+    const qs = `startDate=${start.toISOString()}&endDate=${end.toISOString()}`;
     try {
-      const res = await fetch(
-        `/api/sales?startDate=${start.toISOString()}&endDate=${end.toISOString()}`
-      );
-      if (!res.ok) throw new Error("Failed to fetch sales");
-      const data = await res.json();
+      const [salesRes, expRes] = await Promise.all([
+        fetch(`/api/sales?${qs}`),
+        fetch(`/api/expenses?${qs}`),
+      ]);
+      if (!salesRes.ok) throw new Error("Failed to fetch sales");
+      const data = await salesRes.json();
       setSales(data);
+      if (expRes.ok) {
+        const raw: unknown = await expRes.json();
+        if (Array.isArray(raw)) {
+          setRangeExpenses(
+            raw
+              .filter(
+                (x): x is { id: string; amount: number } =>
+                  typeof x === "object" &&
+                  x !== null &&
+                  "id" in x &&
+                  "amount" in x &&
+                  typeof (x as { id: unknown }).id === "string" &&
+                  typeof (x as { amount: unknown }).amount === "number"
+              )
+              .map((x) => ({ id: x.id, amount: x.amount }))
+          );
+        } else {
+          setRangeExpenses([]);
+        }
+      } else {
+        setRangeExpenses([]);
+      }
     } catch (error) {
       console.error("Failed to load sales:", error);
       setSales([]);
+      setRangeExpenses([]);
     } finally {
       setLoading(false);
     }
@@ -291,6 +322,16 @@ export default function SalesHistoryPage() {
     return Array.from(options).sort((a,b) => a - b)
   }, [nonZeroServiceCount])
 
+  const totalRevenue = useMemo(
+    () => sales.reduce((sum, s) => sum + s.total, 0),
+    [sales]
+  );
+  const totalExpensesInRange = useMemo(
+    () => rangeExpenses.reduce((sum, e) => sum + e.amount, 0),
+    [rangeExpenses]
+  );
+  const netProfit = totalRevenue - totalExpensesInRange;
+
   return (
     <div className="space-y-6">
       <div>
@@ -347,6 +388,40 @@ export default function SalesHistoryPage() {
           </label>
         </div>
       )}
+
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="Profit summary">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-sm text-slate-500">Revenue</div>
+          <div className="text-xl font-semibold text-slate-900 tabular-nums mt-1 min-h-[1.75rem]">
+            {loading ? <span className="text-slate-400">…</span> : formatPHP(totalRevenue)}
+          </div>
+          <p className="text-xs text-slate-400 mt-2">Completed sales in this range</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-sm text-slate-500">Expenses</div>
+          <div className="text-xl font-semibold text-slate-900 tabular-nums mt-1 min-h-[1.75rem]">
+            {loading ? <span className="text-slate-400">…</span> : formatPHP(totalExpensesInRange)}
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            From Finance; dated within this range
+          </p>
+        </div>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm">
+          <div className="text-sm text-emerald-800">Net profit</div>
+          <div
+            className={`text-xl font-semibold tabular-nums mt-1 min-h-[1.75rem] ${
+              loading
+                ? "text-slate-400"
+                : netProfit >= 0
+                  ? "text-emerald-900"
+                  : "text-red-700"
+            }`}
+          >
+            {loading ? "…" : formatPHP(netProfit)}
+          </div>
+          <p className="text-xs text-emerald-700/80 mt-2">Revenue minus expenses</p>
+        </div>
+      </section>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-slate-600">

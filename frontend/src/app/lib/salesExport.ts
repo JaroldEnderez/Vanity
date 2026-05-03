@@ -10,6 +10,7 @@ import { parseOptionalMaterialsJson } from "@/src/app/lib/optionalSessionMateria
 
 export const saleExportInclude = Prisma.validator<Prisma.SaleInclude>()({
   staff: { select: { name: true } },
+  customer: { select: { name: true } },
   saleServices: {
     orderBy: { createdAt: "asc" },
     select: {
@@ -43,6 +44,7 @@ export type SaleForExport = Prisma.SaleGetPayload<{
 
 export type SalesExportRow = {
   Date: string;
+  Customer: string;
   Service: string;
   Staff: string;
   Total: number;
@@ -111,6 +113,7 @@ export function flattenSalesToRows(sales: SaleForExport[]): SalesExportRow[] {
   for (const sale of sales) {
     const materialsStr = buildMaterialsSummary(sale);
     const dateStr = formatEndedDateShort(sale.endedAt);
+    const customerName = sale.customer?.name?.trim() ?? "";
     const defaultStaff = sale.staff?.name?.trim() ?? "";
 
     sale.saleServices.forEach((ss, index) => {
@@ -119,6 +122,7 @@ export function flattenSalesToRows(sales: SaleForExport[]): SalesExportRow[] {
       const staffName = ss.itemStaffName?.trim() || defaultStaff;
       rows.push({
         Date: index === 0 ? dateStr : "",
+        Customer: customerName,
         Service: serviceName,
         Staff: staffName,
         Total: ss.qty * ss.price,

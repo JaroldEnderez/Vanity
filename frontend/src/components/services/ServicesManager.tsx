@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Pencil, Trash2, X, Check, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, Clock, Download, Loader2 } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
 import {
   DEFAULT_SERVICE_CATEGORY,
@@ -43,6 +43,21 @@ const emptyForm: ServiceForm = {
   price: 0,
 };
 
+function parseFilenameFromContentDisposition(cd: string | null): string | null {
+  if (!cd) return null;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      return star[1].trim();
+    }
+  }
+  const quoted = /filename="([^"]+)"/i.exec(cd);
+  if (quoted?.[1]) return quoted[1];
+  return null;
+}
+
 export default function ServicesManager({ initialServices }: Props) {
   const [services, setServices] = useState<Service[]>(initialServices);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -51,6 +66,7 @@ export default function ServicesManager({ initialServices }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [addServiceError, setAddServiceError] = useState<string | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const sortedServices = useMemo(
     () => [...services].sort((a, b) => a.name.localeCompare(b.name)),
@@ -145,6 +161,32 @@ export default function ServicesManager({ initialServices }: Props) {
     }
   };
 
+  const handleExportCsv = async () => {
+    setExportLoading(true);
+    try {
+      const res = await fetch("/api/services/export");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(typeof err.error === "string" ? err.error : "Export failed");
+      }
+      const blob = await res.blob();
+      const filename =
+        parseFilenameFromContentDisposition(res.headers.get("Content-Disposition")) ??
+        "services.csv";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setIsLoading(true);
     try {
@@ -172,8 +214,22 @@ export default function ServicesManager({ initialServices }: Props) {
           <h1 className="text-2xl font-bold text-slate-900">Services</h1>
           <p className="text-slate-500">Manage your salon services and pricing</p>
         </div>
-        <div className="flex items-start gap-2">
+        <div className="flex flex-wrap items-start justify-end gap-2">
           <button
+            type="button"
+            onClick={() => void handleExportCsv()}
+            disabled={exportLoading}
+            className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 bg-white text-slate-800 rounded-md hover:bg-slate-50 shadow-sm transition disabled:opacity-50"
+          >
+            {exportLoading ? (
+              <Loader2 size={16} className="animate-spin shrink-0" aria-hidden />
+            ) : (
+              <Download size={16} className="shrink-0" aria-hidden />
+            )}
+            Export CSV
+          </button>
+          <button
+            type="button"
             onClick={handleAddNew}
             disabled={isAddingNew}
             className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-50"

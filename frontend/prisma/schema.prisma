@@ -22,6 +22,7 @@ model Branch {
   sales         Sale[]
   services      Service[]
   staff         Staff[]
+  expenses      Expense[]
   account       BranchAccount?
 }
 
@@ -250,4 +251,18 @@ enum SaleStatus {
   DRAFT      // In-progress, can be modified
   COMPLETED  // Finalized, immutable
   CANCELLED  // Cancelled, immutable
+}
+
+model Expense {
+  id        String   @id @default(uuid())
+  branchId  String
+  date      DateTime
+  item      String
+  amount    Float
+  remarks   String?
+  createdAt DateTime @default(now())
+  branch    Branch   @relation(fields: [branchId], references: [id])
+
+  @@index([branchId])
+  @@index([branchId, date])
 }
