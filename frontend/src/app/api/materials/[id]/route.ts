@@ -4,16 +4,16 @@ import {
   updateMaterial,
   deleteMaterial,
 } from "@/src/app/lib/materials";
-import { requireAuthenticatedUser } from "@/src/app/lib/auth-utils";
+import { getAuthBranchId } from "@/src/app/lib/auth-utils";
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthenticatedUser();
+    const branchId = await getAuthBranchId();
     const { id } = await params;
-    const material = await getMaterialById(id);
+    const material = await getMaterialById(id, branchId);
     if (!material) {
       return NextResponse.json(
         { error: "Material not found" },
@@ -34,10 +34,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthenticatedUser();
     const { id } = await params;
     const body = await req.json();
-    const material = await updateMaterial(id, body);
+    const branchId = await getAuthBranchId();
+    const material = await updateMaterial(branchId, id, body);
     return NextResponse.json(material);
   } catch (error) {
     console.error(error);
@@ -56,9 +56,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthenticatedUser();
+    const branchId = await getAuthBranchId();
     const { id } = await params;
-    const material = await deleteMaterial(id);
+    const material = await deleteMaterial(branchId, id);
     return NextResponse.json({ success: true, material });
   } catch (error) {
     console.error(error);

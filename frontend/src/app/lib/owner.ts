@@ -248,25 +248,31 @@ export async function getBranchDetail(
   };
 }
 
-/** Materials used by this branch's services, with current stock (read-only) */
+/** All catalog materials with this branch's stock (read-only) */
 export async function getBranchInventory(branchId: string) {
-  const serviceIds = await db.service.findMany({
+  const rows = await db.branchMaterial.findMany({
     where: { branchId },
-    select: { id: true },
-  }).then((s) => s.map((x) => x.id));
-  if (serviceIds.length === 0) return [];
-
-  const materialIds = await db.serviceMaterial.findMany({
-    where: { serviceId: { in: serviceIds } },
-    select: { materialId: true },
-  }).then((rows) => [...new Set(rows.map((r) => r.materialId))]);
-  if (materialIds.length === 0) return [];
-
-  return db.material.findMany({
-    where: { id: { in: materialIds } },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, unit: true, stock: true },
+    include: {
+      material: {
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          isActive: true,
+        },
+      },
+    },
+    orderBy: { material: { name: "asc" } },
   });
+
+  return rows
+    .filter((r) => r.material.isActive)
+    .map((r) => ({
+      id: r.material.id,
+      name: r.material.name,
+      unit: r.material.unit,
+      stock: r.stock,
+    }));
 }
 
 /** Completed sales for a branch (read-only list) */

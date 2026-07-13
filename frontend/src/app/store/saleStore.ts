@@ -89,6 +89,7 @@ type SaleStore = {
   isLoading: boolean;
   isInitialized: boolean;
   isSaving: boolean;
+  loadError: string | null;
 
   // Pending session creation (confirm before creating)
   pendingSessionCreation: boolean;
@@ -251,21 +252,25 @@ function generateTempId(): string {
 // ============================================
 const SAVE_DELAY = 1500;
 const saveTimers: Map<string, NodeJS.Timeout> = new Map();
-const pendingOperations: Map<string, Array<() => Promise<void>>> = new Map();
+const pendingOperations: Map<
+  string,
+  Array<{ op: () => Promise<void>; onError?: () => Promise<void> }>
+> = new Map();
 
-function queueSave(draftId: string, operation: () => Promise<void>) {
-  // Add operation to pending queue
+function queueSave(
+  draftId: string,
+  operation: () => Promise<void>,
+  onError?: () => Promise<void>
+) {
   const ops = pendingOperations.get(draftId) || [];
-  ops.push(operation);
+  ops.push({ op: operation, onError });
   pendingOperations.set(draftId, ops);
 
-  // Clear existing timer (reset on every change)
   const existingTimer = saveTimers.get(draftId);
   if (existingTimer) {
     clearTimeout(existingTimer);
   }
 
-  // Set new timer - save after SAVE_DELAY ms of inactivity
   const timer = setTimeout(async () => {
     const operations = pendingOperations.get(draftId) || [];
     pendingOperations.delete(draftId);
@@ -274,11 +279,26 @@ function queueSave(draftId: string, operation: () => Promise<void>) {
     if (operations.length > 0) {
       useSaleStore.setState({ isSaving: true });
       try {
-        for (const op of operations) {
-          await op();
+        for (const entry of operations) {
+          try {
+            await entry.op();
+          } catch (error) {
+            useToastStore.getState().show(
+              "Save failed. Your changes may be out of sync. Pull to retry or refresh the draft."
+            );
+            console.error("Failed to save operation:", error);
+            if (entry.onError) {
+              try {
+                await entry.onError();
+              } catch (refreshError) {
+                console.error("Failed to refresh draft after save error:", refreshError);
+              }
+            }
+            throw error;
+          }
         }
       } catch (error) {
-        console.error("Failed to save:", error);
+        // already handled per-operation
       } finally {
         useSaleStore.setState({ isSaving: false });
       }
@@ -286,6 +306,25 @@ function queueSave(draftId: string, operation: () => Promise<void>) {
   }, SAVE_DELAY);
 
   saveTimers.set(draftId, timer);
+}
+
+async function refreshDraftFromServer(draftId: string) {
+  const res = await fetch(`/api/sessions/${draftId}`);
+  if (!res.ok) {
+    throw new Error("Failed to refresh draft");
+  }
+
+  const data = await res.json();
+  if (!isApiSalePayload(data)) {
+    throw new Error("Invalid draft payload from server");
+  }
+
+  const draft = dbSessionToDraft(data);
+  useSaleStore.setState((state) => ({
+    draftSales: state.draftSales.map((existing) =>
+      existing.id === draftId ? draft : existing
+    ),
+  }));
 }
 
 // Force save immediately (used before checkout)
@@ -299,8 +338,8 @@ async function flushSaves(draftId: string) {
   const operations = pendingOperations.get(draftId) || [];
   pendingOperations.delete(draftId);
 
-  for (const op of operations) {
-    await op();
+  for (const entry of operations) {
+    await entry.op();
   }
 }
 
@@ -310,6 +349,7 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
   isLoading: false,
   isInitialized: false,
   isSaving: false,
+  loadError: null,
   pendingSessionCreation: false,
   pendingCreationStaffId: null,
 
@@ -352,7 +392,7 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
   loadDraftsFromDB: async () => {
     if (get().isInitialized) return;
 
-    set({ isLoading: true });
+    set({ isLoading: true, loadError: null });
     try {
       const res = await fetch("/api/sessions");
       if (!res.ok) throw new Error("Failed to load sessions");
@@ -364,10 +404,11 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         draftSales: drafts,
         activeDraftId: drafts.length > 0 ? drafts[0].id : null,
         isInitialized: true,
+        loadError: null,
       });
     } catch (error) {
       console.error("Failed to load drafts:", error);
-      set({ isInitialized: true });
+      set({ loadError: "Couldn\'t load sessions, tap to retry" });
     } finally {
       set({ isLoading: false });
     }
@@ -567,28 +608,38 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
     });
 
     // Queue debounced save
-    queueSave(draftId, async () => {
-      const res = await fetch(`/api/sessions/${draftId}/items`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serviceId: item.serviceId,
-          qty: item.qty,
-          price: item.price,
-          materials: item.materials?.map((m) => ({
-            materialId: m.materialId,
-            quantity: m.quantity,
-          })),
-          serviceDisplayName: item.coloringDetails?.serviceDisplayName,
-          colorUsed: item.coloringDetails?.colorUsed,
-          developer: item.coloringDetails?.developer,
-          itemStaffName: item.coloringDetails?.itemStaffName,
-          remarks: item.coloringDetails?.remarks,
-        }),
-      });
+    queueSave(
+      draftId,
+      async () => {
+        const res = await fetch(`/api/sessions/${draftId}/items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serviceId: item.serviceId,
+            qty: item.qty,
+            price: item.price,
+            materials: item.materials?.map((m) => ({
+              materialId: m.materialId,
+              quantity: m.quantity,
+            })),
+            serviceDisplayName: item.coloringDetails?.serviceDisplayName,
+            colorUsed: item.coloringDetails?.colorUsed,
+            developer: item.coloringDetails?.developer,
+            itemStaffName: item.coloringDetails?.itemStaffName,
+            remarks: item.coloringDetails?.remarks,
+          }),
+        });
 
-      if (res.ok) {
-        // Update with real data from server
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          const msg =
+            typeof data === "object" && data !== null && "error" in data &&
+            typeof (data as { error: unknown }).error === "string"
+              ? (data as { error: string }).error
+              : `Failed to add item (${res.status})`;
+          throw new Error(msg);
+        }
+
         const session = await res.json();
         const updatedDraft = dbSessionToDraft(session);
         set((state) => ({
@@ -596,8 +647,11 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
             d.id === draftId ? updatedDraft : d
           ),
         }));
+      },
+      async () => {
+        await refreshDraftFromServer(draftId);
       }
-    });
+    );
   },
 
   // Optimistic + debounced
@@ -620,11 +674,26 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
 
     // Queue debounced save (skip temp items that haven't been saved yet)
     if (!itemId.startsWith("temp-")) {
-      queueSave(draftId, async () => {
-        await fetch(`/api/sessions/${draftId}/items/${itemId}`, {
-          method: "DELETE",
-        });
-      });
+      queueSave(
+        draftId,
+        async () => {
+          const res = await fetch(`/api/sessions/${draftId}/items/${itemId}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            const msg =
+              typeof data === "object" && data !== null && "error" in data &&
+              typeof (data as { error: unknown }).error === "string"
+                ? (data as { error: string }).error
+                : `Failed to remove item (${res.status})`;
+            throw new Error(msg);
+          }
+        },
+        async () => {
+          await refreshDraftFromServer(draftId);
+        }
+      );
     }
   },
 
@@ -651,13 +720,28 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
     });
 
     // Queue debounced save
-    queueSave(draftId, async () => {
-      await fetch(`/api/sessions/${draftId}/materials/${materialId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity }),
-      });
-    });
+    queueSave(
+      draftId,
+      async () => {
+        const res = await fetch(`/api/sessions/${draftId}/materials/${materialId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quantity }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          const msg =
+            typeof data === "object" && data !== null && "error" in data &&
+            typeof (data as { error: unknown }).error === "string"
+              ? (data as { error: string }).error
+              : `Failed to update material (${res.status})`;
+          throw new Error(msg);
+        }
+      },
+      async () => {
+        await refreshDraftFromServer(draftId);
+      }
+    );
   },
 
   setOptionalSessionMaterials: (draftId, materials, remarks) => {

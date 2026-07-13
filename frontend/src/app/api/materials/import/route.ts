@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireAuthenticatedUser } from "@/src/app/lib/auth-utils";
+import { getAuthBranchId } from "@/src/app/lib/auth-utils";
 import { importMaterialsFromParsedRows } from "@/src/app/lib/materials";
 import {
   materialsImportTemplateCsv,
@@ -12,7 +12,7 @@ const MAX_BYTES = 2 * 1024 * 1024;
 /** UTF-8 CSV template for materials import. */
 export async function GET() {
   try {
-    await requireAuthenticatedUser();
+    await getAuthBranchId();
     const body = materialsImportTemplateCsv();
     const filename = "materials-import-template.csv";
     return new NextResponse(body, {
@@ -32,7 +32,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await requireAuthenticatedUser();
+    const branchId = await getAuthBranchId();
 
     const ct = req.headers.get("content-type") || "";
     if (!ct.includes("multipart/form-data")) {
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Import failed" }, { status: 400 });
     }
 
-    const summary = await importMaterialsFromParsedRows(parsed.rows);
+    const summary = await importMaterialsFromParsedRows(branchId, parsed.rows);
     return NextResponse.json({
       ok: true,
       created: summary.created,

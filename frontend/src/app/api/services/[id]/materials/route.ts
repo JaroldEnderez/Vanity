@@ -26,7 +26,7 @@ export async function GET(
       );
     }
 
-    const materials = await getServiceMaterials(id);
+    const materials = await getServiceMaterials(id, branchId);
     return NextResponse.json(materials);
   } catch (error) {
     console.error(error);

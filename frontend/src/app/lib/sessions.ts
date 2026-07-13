@@ -370,7 +370,6 @@ export async function updateSessionMaterial(
 
 // CHECKOUT session (finalize) - Optimized with transaction and batch updates
 export async function checkoutSession(id: string, cashReceived?: number) {
-  // Use transaction for atomicity
   return db.$transaction(async (tx) => {
     const session = await tx.sale.findUnique({
       where: { id },
@@ -390,18 +389,15 @@ export async function checkoutSession(id: string, cashReceived?: number) {
     }
 
     if (session.status !== SaleStatus.DRAFT) {
-      throw new Error("Session is already completed or cancelled");
+      throw new Error("Already completed");
     }
 
-    // Recalculate totals from persisted data
     const basePrice = session.saleServices.reduce(
       (sum, ss) => sum + ss.price * ss.qty,
       0
     );
     const addOnsTotal = session.saleAddOns.reduce((sum, sa) => sum + sa.price, 0);
     const total = basePrice + addOnsTotal;
-
-    // Calculate change if cash received is provided
     const changeGiven = cashReceived !== undefined ? cashReceived - total : null;
 
     let materialsToDeduct = session.saleMaterials.map((m) => ({
@@ -429,11 +425,8 @@ export async function checkoutSession(id: string, cashReceived?: number) {
       ...optionalJsonToDeductionRows(session.optionalMaterials),
     ];
 
-    await deductMaterialsForSaleCompletion(tx, session.id, materialsToDeduct);
-
-    // Update sale status and return with full includes
-    return tx.sale.update({
-      where: { id },
+    const updateResult = await tx.sale.updateMany({
+      where: { id, status: SaleStatus.DRAFT },
       data: {
         status: SaleStatus.COMPLETED,
         endedAt: new Date(),
@@ -443,6 +436,16 @@ export async function checkoutSession(id: string, cashReceived?: number) {
         cashReceived: cashReceived ?? null,
         changeGiven,
       },
+    });
+
+    if (updateResult.count === 0) {
+      throw new Error("Already completed");
+    }
+
+    await deductMaterialsForSaleCompletion(tx, session.id, session.branchId, materialsToDeduct);
+
+    return tx.sale.findUnique({
+      where: { id },
       include: sessionInclude,
     });
   }, interactiveTxOptions);

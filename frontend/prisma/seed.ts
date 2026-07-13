@@ -155,7 +155,7 @@ async function main(){
     console.log(`Created ${customers.length} customers`);
 
     // ============================================
-    // INVENTORY: Hair color products & variants
+    // INVENTORY: Hair color products & variants (per branch)
     // ============================================
     console.log("Seeding hair color inventory...")
 
@@ -164,7 +164,7 @@ async function main(){
     /** ml per retail bottle (1 L; 4 L bottles would use 4000 here). */
     const BOTTLE_ML = 1000;
 
-    const hairColorMaterials = [
+    const hairColorMaterialDefs = [
         // Loreal Majirel variants — stock stored as total ml
         {
             name: "5.1 Ash Brown",
@@ -240,36 +240,56 @@ async function main(){
         },
     ];
 
-    for (const material of hairColorMaterials) {
+    const seededMaterials: { id: string; name: string; brand: string | null; productName: string | null }[] = [];
+
+    for (const def of hairColorMaterialDefs) {
+        const { stock, ...catalog } = def;
         const existing = await db.material.findFirst({
             where: {
-                name: material.name,
-                brand: material.brand,
-                productName: material.productName,
+                name: catalog.name,
+                brand: catalog.brand,
+                productName: catalog.productName,
             },
         });
 
+        let materialId: string;
         if (!existing) {
-            await db.material.create({
-                data: material,
-            });
+            const created = await db.material.create({ data: catalog });
+            materialId = created.id;
         } else {
             await db.material.update({
                 where: { id: existing.id },
-                data: {
-                    brand: material.brand,
-                    productName: material.productName,
-                    category: material.category,
-                    unit: material.unit,
-                    packageAmount: material.packageAmount,
-                    packageMeasure: material.packageMeasure,
-                    stock: existing.stock || material.stock,
+                data: catalog,
+            });
+            materialId = existing.id;
+        }
+
+        seededMaterials.push({
+            id: materialId,
+            name: catalog.name,
+            brand: catalog.brand,
+            productName: catalog.productName,
+        });
+
+        for (const branch of branches) {
+            await db.branchMaterial.upsert({
+                where: {
+                    branchId_materialId: {
+                        branchId: branch.id,
+                        materialId,
+                    },
+                },
+                update: { stock },
+                create: {
+                    branchId: branch.id,
+                    materialId,
+                    stock,
                 },
             });
         }
     }
 
-    console.log("Hair color inventory seeded.");
+    console.log(`Hair color inventory seeded for ${branches.length} branches (${seededMaterials.length} products).`);
 
     console.log("Seeding services...")
 

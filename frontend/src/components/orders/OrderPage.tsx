@@ -108,6 +108,7 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
 export default function OrderPage({ services, defaultStaffId }: Props) {
 
   const isInitialized = useSaleStore((state) => state.isInitialized);
+  const loadError = useSaleStore((state) => state.loadError);
   const loadDraftsFromDB = useSaleStore((state) => state.loadDraftsFromDB);
   const draftSales = useSaleStore((state) => state.draftSales);
   const activeDraftId = useSaleStore((state) => state.activeDraftId);
@@ -161,6 +162,23 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
   };
 
   if (!isInitialized) {
+    if (loadError) {
+      return (
+        <div className="h-full flex items-center justify-center px-4">
+          <div className="text-center space-y-4">
+            <p className="text-slate-700 font-semibold">Couldn&apos;t load sessions.</p>
+            <p className="text-slate-500">Tap retry to load draft sessions again.</p>
+            <button
+              onClick={loadDraftsFromDB}
+              className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center space-y-3">

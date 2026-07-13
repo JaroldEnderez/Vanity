@@ -14,16 +14,19 @@ generator client {
 
 
 model Branch {
-  id            String          @id @default(uuid())
-  name          String          @unique
-  address       String
-  lastActiveAt  DateTime?       // For owner view: online if updated in last 5 min
-  createdAt     DateTime        @default(now())
-  sales         Sale[]
-  services      Service[]
-  staff         Staff[]
-  expenses      Expense[]
-  account       BranchAccount?
+  id                 String              @id @default(uuid())
+  name               String              @unique
+  address            String
+  lastActiveAt       DateTime?           // For owner view: online if updated in last 5 min
+  createdAt          DateTime            @default(now())
+  sales              Sale[]
+  services           Service[]
+  staff              Staff[]
+  expenses           Expense[]
+  account            BranchAccount?
+  branchMaterials    BranchMaterial[]
+  inventoryMovements InventoryMovement[]
+  materials          Material[]
 }
 
 model BranchAccount {
@@ -78,14 +81,14 @@ model Service {
 
 model Material {
   id                 String              @id @default(uuid())
+  branchId           String?
   /// Stable import / catalog key; upsert CSV imports match on this when set.
-  sku                String?             @unique
+  sku                String?
   name               String
   brand              String?
   productName        String?
   category           MaterialCategory    @default(OTHER)
   unit               String
-  stock              Float
   /// When false, hidden from pickers (optional materials, new recipes); kept for sale history / FKs.
   isActive           Boolean             @default(true)
   /// When set with packageMeasure: size of one retail unit from packaging (e.g. 1000 ml per bottle).
@@ -93,9 +96,28 @@ model Material {
   /// When set with packageAmount: stock and sale quantities are in ml or g (total on hand).
   packageMeasure     PackageMeasure?
   createdAt          DateTime            @default(now())
+  branch             Branch?             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branchMaterials    BranchMaterial[]
   inventoryMovements InventoryMovement[]
   saleMaterials      SaleMaterial[]
   serviceMaterials   ServiceMaterial[]
+
+  @@index([branchId])
+  @@unique([branchId, sku])
+}
+
+/// Per-branch stock for a catalog material.
+model BranchMaterial {
+  id         String   @id @default(uuid())
+  branchId   String
+  materialId String
+  stock      Float    @default(0)
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, materialId])
+  @@index([branchId])
+  @@index([materialId])
 }
 
 enum ServiceCategory {
@@ -239,12 +261,16 @@ model Payment {
 
 model InventoryMovement {
   id          String   @id @default(uuid())
+  branchId    String?
   materialId  String
   quantity    Float
   type        String
   referenceId String?
   createdAt   DateTime @default(now())
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   material    Material @relation(fields: [materialId], references: [id])
+
+  @@index([branchId])
 }
 
 enum SaleStatus {

@@ -22,13 +22,21 @@ export async function resolveMaterialsFromServiceRecipes(
   return [...merged.entries()].map(([materialId, quantity]) => ({ materialId, quantity }));
 }
 
+function formatQuantity(value: number) {
+  const formatted = Number.isInteger(value)
+    ? value.toString()
+    : value.toFixed(2).replace(/\.0+$/, "");
+  return formatted;
+}
+
 /**
- * Decrement material stock and append OUT movements for a completed sale.
+ * Decrement branch stock and append OUT movements for a completed sale.
  * Aggregates stock by materialId; movements mirror each SaleMaterial row.
  */
 export async function deductMaterialsForSaleCompletion(
   tx: Prisma.TransactionClient,
   saleId: string,
+  branchId: string,
   saleMaterials: ReadonlyArray<{ materialId: string; quantity: number }>
 ): Promise<void> {
   if (saleMaterials.length === 0) return;
@@ -40,16 +48,49 @@ export async function deductMaterialsForSaleCompletion(
   }
 
   await Promise.all(
-    [...materialUpdates.entries()].map(([materialId, totalQuantity]) =>
-      tx.material.update({
-        where: { id: materialId },
+    [...materialUpdates.entries()].map(async ([materialId, totalQuantity]) => {
+      const branchMaterial = await tx.branchMaterial.findUnique({
+        where: { branchId_materialId: { branchId, materialId } },
+        include: { material: true },
+      });
+
+      if (!branchMaterial) {
+        throw new Error(`Material not found in branch inventory: ${materialId}`);
+      }
+
+      const materialName = branchMaterial.material?.name ?? materialId;
+      const unit = branchMaterial.material?.unit ?? "";
+      const availableStock = branchMaterial.stock ?? 0;
+
+      if (availableStock < totalQuantity) {
+        throw new Error(
+          `Insufficient stock: ${materialName} (need ${formatQuantity(totalQuantity)}${unit ? ` ${unit}` : ""}, have ${formatQuantity(availableStock)}${unit ? ` ${unit}` : ""})`
+        );
+      }
+
+      const updateResult = await tx.branchMaterial.updateMany({
+        where: {
+          id: branchMaterial.id,
+          stock: { gte: totalQuantity },
+        },
         data: { stock: { decrement: totalQuantity } },
-      })
-    )
+      });
+
+      if (updateResult.count === 0) {
+        const latest = await tx.branchMaterial.findUnique({
+          where: { id: branchMaterial.id },
+        });
+        const latestStock = latest?.stock ?? 0;
+        throw new Error(
+          `Insufficient stock: ${materialName} (need ${formatQuantity(totalQuantity)}${unit ? ` ${unit}` : ""}, have ${formatQuantity(latestStock)}${unit ? ` ${unit}` : ""})`
+        );
+      }
+    })
   );
 
   await tx.inventoryMovement.createMany({
     data: saleMaterials.map((sm) => ({
+      branchId,
       materialId: sm.materialId,
       quantity: sm.quantity,
       type: "OUT",

@@ -118,6 +118,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const updateDraftCustomer = useSaleStore((state) => state.updateDraftCustomer);
     const removeItemFromDraft = useSaleStore((state) => state.removeItemFromDraft);
     const checkoutDraft = useSaleStore((state) => state.checkoutDraft);
+    const isSaving = useSaleStore((state) => state.isSaving);
     
     // Compute active draft from subscribed data
     const activeDraft = activeDraftId 
@@ -295,6 +296,9 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         <div className="h-full flex flex-col">
         {/* Sticky header */}
         <div className="flex-shrink-0 pb-2 md:pb-3 border-b mb-2 md:mb-3 bg-slate-50 space-y-2 px-2 md:px-0">
+          {isSaving ? (
+            <div className="text-xs text-slate-500">Saving...</div>
+          ) : null}
           {/* Stylist dropdown */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-slate-600 w-[4.75rem] shrink-0">Stylist</span>

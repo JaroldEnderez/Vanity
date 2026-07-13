@@ -23,7 +23,13 @@ export async function POST(
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to checkout sale";
-    const status = message.includes("Unauthorized") ? 401 : 500;
+    const status = message.includes("Insufficient stock")
+      ? 400
+      : message === "Already completed" || message.includes("already completed")
+      ? 409
+      : message.includes("Unauthorized")
+      ? 401
+      : 500;
     return NextResponse.json(
       { error: message },
       { status }

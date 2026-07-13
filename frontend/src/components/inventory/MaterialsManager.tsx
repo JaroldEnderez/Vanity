@@ -35,6 +35,7 @@ type Material = {
 
 type Props = {
   initialMaterials: Material[];
+  canManageCatalog?: boolean;
 };
 
 type MaterialForm = {
@@ -113,6 +114,18 @@ function buildPayload(form: MaterialForm): Record<string, unknown> {
   };
 }
 
+function buildStockPayload(form: MaterialForm): Record<string, unknown> {
+  if (formHasCompletePackage(form)) {
+    const amt = Number(form.packageAmount);
+    const units = Number(form.stockUnits);
+    if (!Number.isFinite(units) || units < 0) {
+      throw new Error("Units on hand must be zero or positive");
+    }
+    return { stock: units * amt };
+  }
+  return { stock: form.stock };
+}
+
 function materialToForm(material: Material): MaterialForm {
   const pkg = hasPackageMaterial(material);
   return {
@@ -129,7 +142,7 @@ function materialToForm(material: Material): MaterialForm {
   };
 }
 
-export default function MaterialsManager({ initialMaterials }: Props) {
+export default function MaterialsManager({ initialMaterials, canManageCatalog = false }: Props) {
   const [materials, setMaterials] = useState<Material[]>(initialMaterials);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -176,6 +189,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
   };
 
   const handleAddNew = () => {
+    if (!canManageCatalog) return;
     setIsAddingNew(true);
     setEditingId(null);
     setFormData(emptyForm);
@@ -195,7 +209,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
   };
 
   const handleSaveNew = async () => {
-    if (!formData.name.trim()) return;
+    if (!canManageCatalog || !formData.name.trim()) return;
 
     let payload: Record<string, unknown>;
     try {
@@ -235,7 +249,7 @@ export default function MaterialsManager({ initialMaterials }: Props) {
 
     let payload: Record<string, unknown>;
     try {
-      payload = buildPayload(formData);
+      payload = canManageCatalog ? buildPayload(formData) : buildStockPayload(formData);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Invalid form");
       return;
@@ -410,81 +424,86 @@ export default function MaterialsManager({ initialMaterials }: Props) {
     }
   };
 
-  const packageFormFields = (variant: "new" | "edit") => {
-    const ring = variant === "new" ? "focus:ring-emerald-500" : "focus:ring-blue-500";
-    return (
-      <>
-        <td className="px-4 py-3 align-top">
-          <div className="flex flex-col gap-1.5 items-stretch max-w-[9rem] mx-auto">
+  const packageFormFields = (
+  variant: "new" | "edit",
+  disablePackageFields = false
+) => {
+  const ring = variant === "new" ? "focus:ring-emerald-500" : "focus:ring-blue-500";
+  return (
+    <>
+      <td className="px-4 py-3 align-top">
+        <div className="flex flex-col gap-1.5 items-stretch max-w-[9rem] mx-auto">
+          <input
+            type="number"
+            min={0}
+            step="any"
+            value={formData.packageAmount === "" ? "" : formData.packageAmount}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "") {
+                setFormData({ ...formData, packageAmount: "" });
+                return;
+              }
+              const n = parseFloat(v);
+              setFormData({
+                ...formData,
+                packageAmount: Number.isFinite(n) ? n : "",
+              });
+            }}
+            disabled={disablePackageFields}
+            placeholder="e.g. 1000"
+            className={`w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${ring}`}
+          />
+          <select
+            value={formData.packageMeasure}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                packageMeasure: e.target.value as "" | PackageMeasure,
+              })
+            }
+            disabled={disablePackageFields}
+            className={`w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${ring}`}
+          >
+            <option value="">No package tracking</option>
+            <option value="ML">ml per {formData.unit || "unit"}</option>
+            <option value="GRAM">g per {formData.unit || "unit"}</option>
+          </select>
+          <p className="text-[10px] text-slate-500 leading-tight">
+            From packaging. Leave empty for simple count stock.
+          </p>
+        </div>
+      </td>
+      <td className="px-4 py-3 align-top">
+        {formHasCompletePackage(formData) ? (
+          <div className="flex flex-col items-center gap-1">
+            <label className="text-[10px] text-slate-500 uppercase tracking-wide">Units on hand</label>
             <input
               type="number"
               min={0}
               step="any"
-              value={formData.packageAmount === "" ? "" : formData.packageAmount}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "") {
-                  setFormData({ ...formData, packageAmount: "" });
-                  return;
-                }
-                const n = parseFloat(v);
-                setFormData({
-                  ...formData,
-                  packageAmount: Number.isFinite(n) ? n : "",
-                });
-              }}
-              placeholder="e.g. 1000"
-              className={`w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${ring}`}
-            />
-            <select
-              value={formData.packageMeasure}
+              value={formData.stockUnits}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  packageMeasure: e.target.value as "" | PackageMeasure,
+                  stockUnits: parseFloat(e.target.value) || 0,
                 })
               }
-              className={`w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${ring}`}
-            >
-              <option value="">No package tracking</option>
-              <option value="ML">ml per {formData.unit || "unit"}</option>
-              <option value="GRAM">g per {formData.unit || "unit"}</option>
-            </select>
-            <p className="text-[10px] text-slate-500 leading-tight">
-              From packaging. Leave empty for simple count stock.
-            </p>
-          </div>
-        </td>
-        <td className="px-4 py-3 align-top">
-          {formHasCompletePackage(formData) ? (
-            <div className="flex flex-col items-center gap-1">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wide">Units on hand</label>
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={formData.stockUnits}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    stockUnits: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className={`w-24 px-2 py-2 border border-slate-300 rounded-md text-center text-sm focus:outline-none focus:ring-2 ${ring}`}
-              />
-            </div>
-          ) : (
-            <input
-              type="number"
-              value={formData.stock}
-              onChange={(e) => setFormData({ ...formData, stock: parseFloat(e.target.value) || 0 })}
-              className={`w-24 mx-auto block px-3 py-2 border border-slate-300 rounded-md text-center focus:outline-none focus:ring-2 ${ring}`}
+              className={`w-24 px-2 py-2 border border-slate-300 rounded-md text-center text-sm focus:outline-none focus:ring-2 ${ring}`}
             />
-          )}
-        </td>
-      </>
-    );
-  };
+          </div>
+        ) : (
+          <input
+            type="number"
+            value={formData.stock}
+            onChange={(e) => setFormData({ ...formData, stock: parseFloat(e.target.value) || 0 })}
+            className={`w-24 mx-auto block px-3 py-2 border border-slate-300 rounded-md text-center focus:outline-none focus:ring-2 ${ring}`}
+          />
+        )}
+      </td>
+    </>
+  );
+};
 
   return (
     <div className="space-y-4">
@@ -504,38 +523,42 @@ export default function MaterialsManager({ initialMaterials }: Props) {
             />
             Show removed
           </label>
-          <input
-            ref={importFileRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => void handleImportFile(e)}
-          />
-          <a
-            href="/api/materials/import"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50 transition"
-          >
-            <FileDown size={16} />
-            CSV template
-          </a>
-          <button
-            type="button"
-            onClick={() => importFileRef.current?.click()}
-            disabled={importBusy || isAddingNew}
-            className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 text-slate-800 rounded-md hover:bg-slate-50 transition disabled:opacity-50"
-          >
-            <Upload size={16} />
-            {importBusy ? "Importing…" : "Import CSV"}
-          </button>
-          <button
-            type="button"
-            onClick={handleAddNew}
-            disabled={isAddingNew}
-            className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-50"
-          >
-            <Plus size={16} />
-            Add Material
-          </button>
+          {canManageCatalog && (
+            <>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => void handleImportFile(e)}
+              />
+              <a
+                href="/api/materials/import"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50 transition"
+              >
+                <FileDown size={16} />
+                CSV template
+              </a>
+              <button
+                type="button"
+                onClick={() => importFileRef.current?.click()}
+                disabled={importBusy || isAddingNew}
+                className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 text-slate-800 rounded-md hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                <Upload size={16} />
+                {importBusy ? "Importing…" : "Import CSV"}
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNew}
+                disabled={isAddingNew}
+                className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-50"
+              >
+                <Plus size={16} />
+                Add Material
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -667,7 +690,8 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                           type="text"
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={!canManageCatalog}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                           autoFocus
                         />
                       </td>
@@ -677,7 +701,8 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                           onChange={(e) =>
                             setFormData({ ...formData, category: e.target.value as MaterialCategory })
                           }
-                          className="w-full max-w-[13rem] px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          disabled={!canManageCatalog}
+                          className="w-full max-w-[13rem] px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
                         >
                           {CATEGORY_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -687,19 +712,23 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                         </select>
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={formData.unit}
-                          onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          {unitSelectOptions(formData.unit).map((unit) => (
-                            <option key={unit} value={unit}>
-                              {unit}
-                            </option>
-                          ))}
-                        </select>
+                        {canManageCatalog ? (
+                          <select
+                            value={formData.unit}
+                            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {unitSelectOptions(formData.unit).map((unit) => (
+                              <option key={unit} value={unit}>
+                                {unit}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-center text-slate-600">{formData.unit}</div>
+                        )}
                       </td>
-                      {packageFormFields("edit")}
+                      {packageFormFields("edit", !canManageCatalog)}
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           <button
@@ -750,15 +779,17 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                       <td className="px-4 py-3 text-center text-slate-500 text-sm">—</td>
                       <td className="px-4 py-3">
                         <div className="flex justify-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRestore(material.id)}
-                            disabled={isLoading}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 disabled:opacity-50"
-                          >
-                            <RotateCcw size={14} />
-                            Restore
-                          </button>
+                          {canManageCatalog ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRestore(material.id)}
+                              disabled={isLoading}
+                              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              <RotateCcw size={14} />
+                              Restore
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </>
@@ -812,22 +843,26 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                       <td className="px-4 py-3">
                         {deleteConfirm === material.id ? (
                           <div className="flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(material.id)}
-                              disabled={isLoading}
-                              className="p-2 text-red-600 hover:bg-red-100 rounded-md transition text-xs font-medium"
-                            >
-                              Remove
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirm(null)}
-                              disabled={isLoading}
-                              className="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition text-xs"
-                            >
-                              Cancel
-                            </button>
+                            {canManageCatalog ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(material.id)}
+                                  disabled={isLoading}
+                                  className="p-2 text-red-600 hover:bg-red-100 rounded-md transition text-xs font-medium"
+                                >
+                                  Remove
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirm(null)}
+                                  disabled={isLoading}
+                                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition text-xs"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         ) : (
                           <div className="flex items-center justify-center gap-2">
@@ -839,14 +874,16 @@ export default function MaterialsManager({ initialMaterials }: Props) {
                             >
                               <Pencil size={16} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirm(material.id)}
-                              disabled={isAddingNew || editingId !== null}
-                              className="p-2 text-red-600 hover:bg-red-100 rounded-md transition disabled:opacity-50"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            {canManageCatalog ? (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirm(material.id)}
+                                disabled={isAddingNew || editingId !== null}
+                                className="p-2 text-red-600 hover:bg-red-100 rounded-md transition disabled:opacity-50"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            ) : null}
                           </div>
                         )}
                       </td>
@@ -858,9 +895,11 @@ export default function MaterialsManager({ initialMaterials }: Props) {
               {displayMaterials.length === 0 && !isAddingNew && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                    {showRemoved
-                      ? "No materials (including removed)."
-                      : "No materials yet. Click \"Add Material\" to create one."}
+                        {showRemoved
+                          ? "No materials (including removed)."
+                          : canManageCatalog
+                            ? "No materials yet. Click \"Add Material\" to create one."
+                            : "No materials yet. Ask the owner to create inventory items for your branch."}
                   </td>
                 </tr>
               )}

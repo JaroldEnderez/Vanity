@@ -204,10 +204,9 @@ export async function checkoutSale(id: string) {
     }
 
     if (sale.status !== SaleStatus.DRAFT) {
-      throw new Error("Sale is already completed or cancelled");
+      throw new Error("Already completed");
     }
 
-    // Recalculate totals from persisted data (reproducible!)
     const basePrice = sale.saleServices.reduce(
       (sum, ss) => sum + ss.price * ss.qty,
       0
@@ -235,10 +234,8 @@ export async function checkoutSale(id: string) {
       }
     }
 
-    await deductMaterialsForSaleCompletion(tx, sale.id, materialsToDeduct);
-
-    return tx.sale.update({
-      where: { id },
+    const updateResult = await tx.sale.updateMany({
+      where: { id, status: SaleStatus.DRAFT },
       data: {
         status: SaleStatus.COMPLETED,
         endedAt: new Date(),
@@ -246,6 +243,16 @@ export async function checkoutSale(id: string) {
         addOns: addOnsTotal,
         total,
       },
+    });
+
+    if (updateResult.count === 0) {
+      throw new Error("Already completed");
+    }
+
+    await deductMaterialsForSaleCompletion(tx, sale.id, sale.branchId, materialsToDeduct);
+
+    return tx.sale.findUnique({
+      where: { id },
       include: {
         branch: true,
         staff: true,

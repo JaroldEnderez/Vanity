@@ -25,7 +25,7 @@ export async function getAuthBranchId(): Promise<string> {
 }
 
 /**
- * Any signed-in user (owner or branch). Use for shared resources (e.g. global materials catalog).
+ * Any signed-in user (owner or branch). Use for shared resources when branch context is not required.
  * Prefer getAuthBranchId / requireOwner when the route must be role-specific.
  */
 export async function requireAuthenticatedUser() {

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Plus, Pencil, Trash2, X, Check, Clock, Download, Loader2 } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
+import { formatStockDisplayText, hasPackageMaterial } from "@/src/app/lib/materialPackage";
 import {
   DEFAULT_SERVICE_CATEGORY,
   SERVICE_CATEGORIES,
@@ -65,6 +66,11 @@ export default function ServicesManager({ initialServices }: Props) {
   const [formData, setFormData] = useState<ServiceForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [materialsModalServiceId, setMaterialsModalServiceId] = useState<string | null>(null);
+  const [materialsModalRows, setMaterialsModalRows] = useState<Array<{ id?: string; materialId: string; quantity: number; material?: any }>>([]);
+  const [materialsModalLoading, setMaterialsModalLoading] = useState(false);
+  const [materialsModalSaving, setMaterialsModalSaving] = useState(false);
+  const [materialsOptions, setMaterialsOptions] = useState<Array<{ id: string; name: string; unit: string; sku?: string; stock?: number }>>([]);
   const [addServiceError, setAddServiceError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -206,6 +212,73 @@ export default function ServicesManager({ initialServices }: Props) {
     }
   };
 
+  const openMaterialsModal = async (serviceId: string) => {
+    setMaterialsModalServiceId(serviceId);
+    setMaterialsModalLoading(true);
+    try {
+      const [res, matRes] = await Promise.all([
+        fetch(`/api/services/${serviceId}/materials`),
+        fetch(`/api/materials`),
+      ]);
+      if (!res.ok) throw new Error("Failed to load materials");
+      if (!matRes.ok) throw new Error("Failed to load material options");
+      const data = await res.json();
+      const matData = await matRes.json();
+      setMaterialsOptions(Array.isArray(matData) ? matData : []);
+      // Map to editable rows
+      const rows = (Array.isArray(data) ? data : []).map((r: any) => ({ id: r.id, materialId: r.materialId, quantity: r.quantity || 0, material: r.material }));
+      setMaterialsModalRows(rows);
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Failed to load materials");
+      setMaterialsModalRows([]);
+    } finally {
+      setMaterialsModalLoading(false);
+    }
+  };
+
+  const closeMaterialsModal = () => {
+    setMaterialsModalServiceId(null);
+    setMaterialsModalRows([]);
+    setMaterialsModalLoading(false);
+    setMaterialsModalSaving(false);
+  };
+
+  const saveMaterialsModal = async () => {
+    if (!materialsModalServiceId) return;
+    setMaterialsModalSaving(true);
+    try {
+      const payload = { materials: materialsModalRows.map((r) => ({ materialId: r.materialId, quantity: r.quantity })) };
+      const res = await fetch(`/api/services/${materialsModalServiceId}/materials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to save materials");
+      const updated = await res.json();
+      // Close modal and optionally refresh
+      closeMaterialsModal();
+      // Optionally notify user
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Failed to save materials");
+    } finally {
+      setMaterialsModalSaving(false);
+    }
+  };
+
+  const addMaterialsModalRow = () => {
+    setMaterialsModalRows((s) => [...s, { materialId: "", quantity: 0 }]);
+  };
+
+  const updateMaterialsModalRow = (index: number, patch: Partial<{ materialId: string; quantity: number }>) => {
+    setMaterialsModalRows((s) => s.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  };
+
+  const removeMaterialsModalRow = (index: number) => {
+    setMaterialsModalRows((s) => s.filter((_, i) => i !== index));
+  };
+
   return (
     <div className="space-y-4">
       {/* Add New Button */}
@@ -256,7 +329,7 @@ export default function ServicesManager({ initialServices }: Props) {
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Description</th>
                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Duration</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">Price</th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Materials</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Required materials</th>
                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-600 w-32">Actions</th>
               </tr>
             </thead>
@@ -385,7 +458,7 @@ export default function ServicesManager({ initialServices }: Props) {
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Description</th>
                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Duration</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">Price</th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Materials</th>
+                <th className="text-center px-4 py-3 text-sm font-medium text-slate-600">Required materials</th>
                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-600 w-32">Actions</th>
               </tr>
             </thead>
@@ -520,8 +593,15 @@ export default function ServicesManager({ initialServices }: Props) {
                     <td className="px-4 py-3 text-right">
                       <span className="font-medium text-slate-900">{formatPHP(service.price)}</span>
                     </td>
-                    <td className="px-4 py-3 text-center text-xs text-slate-400">
-                      Not used
+                    <td className="px-4 py-3 text-center text-xs">
+                      <button
+                        type="button"
+                        onClick={() => void openMaterialsModal(service.id)}
+                        disabled={isAddingNew || editingId !== null}
+                        className="text-slate-600 hover:text-slate-900 underline decoration-dotted underline-offset-4 disabled:cursor-not-allowed disabled:text-slate-400"
+                      >
+                        {service.usesMaterials ? "Edit materials" : "Add materials"}
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       {deleteConfirm === service.id ? (
@@ -580,6 +660,110 @@ export default function ServicesManager({ initialServices }: Props) {
         </div>
       )}
       </div>
+
+      {/* Materials Modal */}
+      {materialsModalServiceId ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center px-4 py-8">
+          <div className="absolute inset-0 bg-black/40" onClick={closeMaterialsModal} />
+          <div className="relative w-full max-w-3xl bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Edit Service Materials</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={closeMaterialsModal} className="p-1 text-slate-500 hover:bg-slate-100 rounded-md">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              {materialsModalLoading ? (
+                <div className="text-center py-8">Loading…</div>
+              ) : (
+                <div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full table-fixed">
+                      <colgroup>
+                        <col className="w-[55%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                      </colgroup>
+                      <thead>
+                        <tr className="text-xs text-slate-500">
+                          <th className="text-left px-2 py-2">Material</th>
+                          <th className="text-right px-2 py-2">Stock</th>
+                          <th className="text-right px-2 py-2">Quantity</th>
+                          <th className="px-2 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {materialsModalRows.map((row, i) => (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="px-2 py-2">
+                              <select
+                                value={row.materialId}
+                                onChange={(e) => {
+                                  const id = e.target.value;
+                                  const mat = materialsOptions.find((m) => m.id === id);
+                                  updateMaterialsModalRow(i, { materialId: id, quantity: row.quantity });
+                                  setMaterialsModalRows((s) => s.map((r, idx) => (idx === i ? { ...r, material: mat ?? undefined } : r)));
+                                }}
+                                className="w-full px-2 py-1 border border-slate-300 rounded-md"
+                              >
+                                <option value="">— choose material —</option>
+                                {materialsOptions.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.name}{m.unit ? ` — ${m.unit}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-2 py-2 text-right text-slate-600 text-sm">
+                              {(() => {
+                                const selected = materialsOptions.find((m) => m.id === row.materialId);
+                                const stock = selected?.stock ?? row.material?.stock;
+                                const unit = selected?.unit ?? row.material?.unit;
+                                const packageAmount = selected?.packageAmount ?? row.material?.packageAmount;
+                                const packageMeasure = selected?.packageMeasure ?? row.material?.packageMeasure;
+                                if (stock == null || unit == null) return "—";
+                                if (hasPackageMaterial({ packageAmount, packageMeasure })) {
+                                  const { secondary } = formatStockDisplayText({ stock, unit, packageAmount, packageMeasure });
+                                  return secondary || "—";
+                                }
+                                return `${stock}${unit ? ` ${unit}` : ""}`;
+                              })()}
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <input
+                                type="number"
+                                value={row.quantity}
+                                onChange={(e) => updateMaterialsModalRow(i, { quantity: Number(e.target.value) || 0 })}
+                                className="w-24 px-2 py-1 border border-slate-300 rounded-md text-right"
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <button onClick={() => removeMaterialsModalRow(i)} className="text-red-600 px-2 py-1 text-xs">Remove</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <div>
+                      <button onClick={addMaterialsModalRow} className="px-3 py-1 bg-emerald-600 text-white rounded-md">Add material</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={closeMaterialsModal} className="px-3 py-1 border rounded-md">Cancel</button>
+                      <button onClick={saveMaterialsModal} disabled={materialsModalSaving} className="px-3 py-1 bg-emerald-600 text-white rounded-md">{materialsModalSaving ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

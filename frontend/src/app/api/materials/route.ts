@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getAllMaterials, createMaterial } from "@/src/app/lib/materials";
-import { requireAuthenticatedUser } from "@/src/app/lib/auth-utils";
+import { createMaterial, getAllMaterials } from "@/src/app/lib/materials";
+import { getAuthBranchId } from "@/src/app/lib/auth-utils";
 
 export async function GET(req: Request) {
   try {
-    await requireAuthenticatedUser();
+    const branchId = await getAuthBranchId();
     const { searchParams } = new URL(req.url);
     const includeInactive =
       searchParams.get("includeInactive") === "1" ||
       searchParams.get("includeInactive") === "true";
-    const materials = await getAllMaterials({ includeInactive });
+    const materials = await getAllMaterials(branchId, { includeInactive });
     return NextResponse.json(materials);
   } catch (error) {
     console.error(error);
@@ -21,9 +21,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    await requireAuthenticatedUser();
+    const branchId = await getAuthBranchId();
     const body = await req.json();
-    const material = await createMaterial(body);
+    const material = await createMaterial(branchId, body);
     return NextResponse.json(material, { status: 201 });
   } catch (error) {
     console.error(error);
