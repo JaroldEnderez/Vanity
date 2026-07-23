@@ -22,9 +22,9 @@ import { formatPHP } from "@/src/app/lib/money";
 import {
   draftMaterialUsesPackage,
   formatMeasureAbbrev,
+  materialStockSeverity,
   minSaleMaterialQuantity,
 } from "@/src/app/lib/materialPackage";
-import { isHairColoringLineItem } from "@/src/app/types/service";
 
 // Staff type for dropdown
 type Staff = {
@@ -99,6 +99,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [registerSaving, setRegisterSaving] = useState(false);
     const [registerError, setRegisterError] = useState<string | null>(null);
     const [optionalMaterialsModalOpen, setOptionalMaterialsModalOpen] = useState(false);
+    const [inventoryByMaterialId, setInventoryByMaterialId] = useState<Record<string, { stock: number; unit: string; packageAmount?: number | null; packageMeasure?: string | null }>>({});
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const itemsEndRef = useRef<HTMLDivElement>(null);
@@ -117,6 +118,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     const updateDraftStaff = useSaleStore((state) => state.updateDraftStaff);
     const updateDraftCustomer = useSaleStore((state) => state.updateDraftCustomer);
     const removeItemFromDraft = useSaleStore((state) => state.removeItemFromDraft);
+    const removeItemMaterial = useSaleStore((state) => state.removeItemMaterial);
     const checkoutDraft = useSaleStore((state) => state.checkoutDraft);
     const isSaving = useSaleStore((state) => state.isSaving);
     
@@ -148,6 +150,30 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
           .catch((err) => console.error("Failed to fetch customers:", err))
           .finally(() => setCustomersLoading(false));
     }, []);
+
+    useEffect(() => {
+      if (!activeDraft?.id) {
+        setInventoryByMaterialId({});
+        return;
+      }
+
+      fetch("/api/materials")
+        .then((res) => res.json())
+        .then((data) => {
+          const list = Array.isArray(data) ? data : [];
+          const map = list.reduce<Record<string, { stock: number; unit: string; packageAmount?: number | null; packageMeasure?: string | null }>>((acc, item) => {
+            acc[item.id] = {
+              stock: Number(item.stock ?? 0),
+              unit: item.unit ?? "",
+              packageAmount: item.packageAmount ?? null,
+              packageMeasure: item.packageMeasure ?? null,
+            };
+            return acc;
+          }, {});
+          setInventoryByMaterialId(map);
+        })
+        .catch(() => setInventoryByMaterialId({}));
+    }, [activeDraft?.id]);
 
     // Reset cash when draft changes
     useEffect(() => {
@@ -208,7 +234,16 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         );
     }
 
-    const startedTime = new Date(activeDraft.createdAt).toLocaleTimeString();
+    const startedAt = new Date(activeDraft.createdAt);
+    const startedTime = startedAt.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const startedDate = startedAt.toLocaleDateString([], {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
 
     const handleConfirmPayment = async () => {
         if (!activeDraft || !isValidPayment) return;
@@ -233,9 +268,9 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         }
     };
 
-    const handleMaterialChange = (materialId: string, quantity: number) => {
+    const handleMaterialChange = (itemId: string, materialId: string, quantity: number) => {
         if (activeDraft) {
-            updateItemMaterial(activeDraft.id, materialId, quantity);
+            updateItemMaterial(activeDraft.id, itemId, materialId, quantity);
         }
     };
 
@@ -296,9 +331,13 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         <div className="h-full flex flex-col">
         {/* Sticky header */}
         <div className="flex-shrink-0 pb-2 md:pb-3 border-b mb-2 md:mb-3 bg-slate-50 space-y-2 px-2 md:px-0">
-          {isSaving ? (
-            <div className="text-xs text-slate-500">Saving...</div>
-          ) : null}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="font-medium text-slate-700">Started</span>
+              <span>{startedDate} · {startedTime}</span>
+            </div>
+            <div className="text-xs text-slate-500">{isSaving ? "Saving..." : ""}</div>
+          </div>
           {/* Stylist dropdown */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-slate-600 w-[4.75rem] shrink-0">Stylist</span>
@@ -462,11 +501,6 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
             </div>
           )}
 
-          {/* Started time */}
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-600">Started:</span>
-            <span className="font-medium">{startedTime}</span>
-          </div>
         </div>
 
         {/* Scrollable services section */}
@@ -522,86 +556,14 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                       </div>
                     </div>
 
-                    {/* Per-line recipe materials (hair coloring: hidden here; recipe still applies at checkout — extras go in "Materials used (optional)") */}
-                    {item.materials &&
-                      item.materials.length > 0 &&
-                      !isHairColoringLineItem(item) && (
-                      <div className="mt-2 pt-2 border-t border-slate-200">
-                        <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
-                          <Package size={12} />
-                          <span>Materials</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {item.materials.map((material) => {
-                            const minQ = minSaleMaterialQuantity(material);
-                            const pkg = draftMaterialUsesPackage(material);
-                            const step = 1;
-                            const unitLabel = pkg
-                              ? formatMeasureAbbrev(material.packageMeasure!)
-                              : material.unit;
-                            return (
-                            <div key={material.materialId} className="flex items-center justify-between text-sm gap-2">
-                              <span className="text-slate-700 truncate">{material.name}</span>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {!activeDraft.isPaid && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleMaterialChange(
-                                          material.materialId,
-                                          Math.max(minQ, material.quantity - step)
-                                        )
-                                      }
-                                      className="p-0.5 hover:bg-slate-200 rounded"
-                                      disabled={material.quantity <= minQ}
-                                    >
-                                      <ChevronDown size={14} className="text-slate-500" />
-                                    </button>
-                                    <input
-                                      type="number"
-                                      value={material.quantity}
-                                      onChange={(e) => {
-                                        const v = parseFloat(e.target.value);
-                                        handleMaterialChange(
-                                          material.materialId,
-                                          Number.isFinite(v) && v > 0 ? v : minQ
-                                        );
-                                      }}
-                                      step={pkg ? "0.1" : "1"}
-                                      min={minQ}
-                                      className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleMaterialChange(material.materialId, material.quantity + step)
-                                      }
-                                      className="p-0.5 hover:bg-slate-200 rounded"
-                                    >
-                                      <ChevronUp size={14} className="text-slate-500" />
-                                    </button>
-                                  </>
-                                )}
-                                {activeDraft.isPaid && (
-                                  <span className="font-medium">{material.quantity}</span>
-                                )}
-                                <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
-                              </div>
-                            </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                 </div>
                 ))}
 
-                {/* Optional materials for this visit (extra stock usage; not tied to a line) */}
+                {/* Materials for this sale: service suggestions and optional extras */}
                 <div className="mt-3 pt-3 border-t border-slate-200/80">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-xs md:text-sm text-slate-600">
-                      Materials used (optional):
+                      Materials used:
                     </span>
                     {!activeDraft.isPaid && (
                       <button
@@ -615,108 +577,269 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                     )}
                   </div>
                   {(() => {
+                    const serviceMaterials = activeDraft.items.flatMap((item) =>
+                      (item.materials ?? []).map((material) => ({
+                        ...material,
+                        itemId: item.id,
+                        itemName: item.name,
+                      }))
+                    );
                     const optMaterials = activeDraft.optionalSessionMaterials ?? [];
                     const optRemarks = (activeDraft.optionalSessionRemarks ?? "").trim();
+                    const hasServiceMaterials = serviceMaterials.length > 0;
                     const hasExtras = optMaterials.length > 0;
-                    const hasOptionalContent = hasExtras || optRemarks.length > 0;
+                    const hasOptionalContent = hasServiceMaterials || hasExtras || optRemarks.length > 0;
+
                     if (!hasOptionalContent) {
                       return <p className="text-xs text-slate-400">None recorded.</p>;
                     }
+
                     return (
-                    <div className="space-y-1.5">
-                      {hasExtras && (
-                        <>
-                      {optMaterials.map((material) => {
-                        const minQ = minSaleMaterialQuantity(material);
-                        const pkg = draftMaterialUsesPackage(material);
-                        const step = 1;
-                        const unitLabel = pkg
-                          ? formatMeasureAbbrev(material.packageMeasure!)
-                          : material.unit;
-                        return (
-                          <div
-                            key={`opt-${material.materialId}`}
-                            className="flex items-center justify-between text-sm gap-2 rounded-md bg-white/80 px-2 py-1.5 border border-slate-200/80"
-                          >
-                            <span className="text-slate-700 truncate">{material.name}</span>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {!activeDraft.isPaid && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleOptionalMaterialChange(
-                                        material.materialId,
-                                        Math.max(minQ, material.quantity - step)
-                                      )
-                                    }
-                                    className="p-0.5 hover:bg-slate-200 rounded"
-                                    disabled={material.quantity <= minQ}
-                                  >
-                                    <ChevronDown size={14} className="text-slate-500" />
-                                  </button>
-                                  <input
-                                    type="number"
-                                    value={material.quantity}
-                                    onChange={(e) => {
-                                      const v = parseFloat(e.target.value);
-                                      handleOptionalMaterialChange(
-                                        material.materialId,
-                                        Number.isFinite(v) && v > 0 ? v : minQ
-                                      );
-                                    }}
-                                    step={pkg ? "0.1" : "1"}
-                                    min={minQ}
-                                    className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleOptionalMaterialChange(
-                                        material.materialId,
-                                        material.quantity + step
-                                      )
-                                    }
-                                    className="p-0.5 hover:bg-slate-200 rounded"
-                                  >
-                                    <ChevronUp size={14} className="text-slate-500" />
-                                  </button>
-                                </>
-                              )}
-                              {activeDraft.isPaid && (
-                                <span className="font-medium">{material.quantity}</span>
-                              )}
-                              <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
-                              {!activeDraft.isPaid && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    removeOptionalSessionMaterial(
-                                      activeDraft.id,
-                                      material.materialId
-                                    )
-                                  }
-                                  className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-500"
-                                  title="Remove"
+                      <div className="space-y-2">
+                        {hasServiceMaterials && (
+                          <div className="space-y-1.5">
+                            {serviceMaterials.map((material) => {
+                              const minQ = minSaleMaterialQuantity(material);
+                              const pkg = draftMaterialUsesPackage(material);
+                              const step = 1;
+                              const unitLabel = pkg
+                                ? formatMeasureAbbrev(material.packageMeasure!)
+                                : material.unit;
+                              const inventoryEntry = inventoryByMaterialId[material.materialId];
+                              const stock = inventoryEntry?.stock ?? 0;
+                              const severity = inventoryEntry
+                                ? stock < material.quantity
+                                  ? "red"
+                                  : materialStockSeverity({
+                                      stock,
+                                      packageAmount: inventoryEntry.packageAmount ?? null,
+                                      packageMeasure: inventoryEntry.packageMeasure as any,
+                                    })
+                                : "red";
+                              const warningLabel = !inventoryEntry
+                                ? "Missing from inventory"
+                                : severity === "amber"
+                                  ? "Low stock"
+                                  : "Out of stock";
+                              const isWarning = severity !== "ok";
+                              return (
+                                <div
+                                  key={`svc-${material.itemId}-${material.materialId}`}
+                                  className={`flex items-center justify-between text-sm gap-2 rounded-md px-2 py-1.5 border ${
+                                    isWarning
+                                      ? "border-red-300 bg-red-50/90"
+                                      : "border-slate-200/80 bg-white/80"
+                                  }`}
                                 >
-                                  <X size={14} />
-                                </button>
-                              )}
-                            </div>
+                                  <div className="min-w-0">
+                                    <div className={`truncate ${isWarning ? "text-red-700" : "text-slate-700"}`}>
+                                      {material.name}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 truncate">{material.itemName}</div>
+                                    {isWarning && (
+                                      <div className="mt-0.5 text-[11px] font-medium text-red-600">
+                                        {warningLabel}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {!activeDraft.isPaid && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleMaterialChange(
+                                              material.itemId,
+                                              material.materialId,
+                                              Math.max(minQ, material.quantity - step)
+                                            )
+                                          }
+                                          className="p-0.5 hover:bg-slate-200 rounded"
+                                          disabled={material.quantity <= minQ}
+                                        >
+                                          <ChevronDown size={14} className="text-slate-500" />
+                                        </button>
+                                        <input
+                                          type="number"
+                                          value={material.quantity}
+                                          onChange={(e) => {
+                                            const v = parseFloat(e.target.value);
+                                            handleMaterialChange(
+                                              material.itemId,
+                                              material.materialId,
+                                              Number.isFinite(v) && v > 0 ? v : minQ
+                                            );
+                                          }}
+                                          step={pkg ? "0.1" : "1"}
+                                          min={minQ}
+                                          className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleMaterialChange(
+                                              material.itemId,
+                                              material.materialId,
+                                              material.quantity + step
+                                            )
+                                          }
+                                          className="p-0.5 hover:bg-slate-200 rounded"
+                                        >
+                                          <ChevronUp size={14} className="text-slate-500" />
+                                        </button>
+                                      </>
+                                    )}
+                                    {activeDraft.isPaid && (
+                                      <span className="font-medium">{material.quantity}</span>
+                                    )}
+                                    <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
+                                    {!activeDraft.isPaid && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeItemMaterial(
+                                            activeDraft.id,
+                                            material.itemId,
+                                            material.materialId
+                                          )
+                                        }
+                                        className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-500"
+                                        title="Remove"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                      {optRemarks.length > 0 && (
-                        <div className="rounded-md bg-slate-50/90 border border-slate-200/80 px-2 py-1.5 mb-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5">
-                            Remarks
-                          </p>
-                          <p className="text-xs text-slate-700 whitespace-pre-wrap">{optRemarks}</p>
-                        </div>
-                      )}
-                        </>
-                      )}
-                    </div>
+                        )}
+
+                        {hasExtras && (
+                          <div className="space-y-1.5">
+                            {optMaterials.map((material) => {
+                              const minQ = minSaleMaterialQuantity(material);
+                              const pkg = draftMaterialUsesPackage(material);
+                              const step = 1;
+                              const unitLabel = pkg
+                                ? formatMeasureAbbrev(material.packageMeasure!)
+                                : material.unit;
+                              const inventoryEntry = inventoryByMaterialId[material.materialId];
+                              const stock = inventoryEntry?.stock ?? 0;
+                              const severity = inventoryEntry
+                                ? stock < material.quantity
+                                  ? "red"
+                                  : materialStockSeverity({
+                                      stock,
+                                      packageAmount: inventoryEntry.packageAmount ?? null,
+                                      packageMeasure: inventoryEntry.packageMeasure as any,
+                                    })
+                                : "red";
+                              const warningLabel = !inventoryEntry
+                                ? "Missing from inventory"
+                                : severity === "amber"
+                                  ? "Low stock"
+                                  : "Out of stock";
+                              const isWarning = severity !== "ok";
+                              return (
+                                <div
+                                  key={`opt-${material.materialId}`}
+                                  className={`flex items-center justify-between text-sm gap-2 rounded-md px-2 py-1.5 border ${
+                                    isWarning
+                                      ? "border-red-300 bg-red-50/90"
+                                      : "border-slate-200/80 bg-white/80"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className={`truncate ${isWarning ? "text-red-700" : "text-slate-700"}`}>
+                                      {material.name}
+                                    </div>
+                                    {isWarning && (
+                                      <div className="mt-0.5 text-[11px] font-medium text-red-600">
+                                        {warningLabel}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {!activeDraft.isPaid && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleOptionalMaterialChange(
+                                              material.materialId,
+                                              Math.max(minQ, material.quantity - step)
+                                            )
+                                          }
+                                          className="p-0.5 hover:bg-slate-200 rounded"
+                                          disabled={material.quantity <= minQ}
+                                        >
+                                          <ChevronDown size={14} className="text-slate-500" />
+                                        </button>
+                                        <input
+                                          type="number"
+                                          value={material.quantity}
+                                          onChange={(e) => {
+                                            const v = parseFloat(e.target.value);
+                                            handleOptionalMaterialChange(
+                                              material.materialId,
+                                              Number.isFinite(v) && v > 0 ? v : minQ
+                                            );
+                                          }}
+                                          step={pkg ? "0.1" : "1"}
+                                          min={minQ}
+                                          className="w-14 text-center text-sm border border-slate-300 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleOptionalMaterialChange(
+                                              material.materialId,
+                                              material.quantity + step
+                                            )
+                                          }
+                                          className="p-0.5 hover:bg-slate-200 rounded"
+                                        >
+                                          <ChevronUp size={14} className="text-slate-500" />
+                                        </button>
+                                      </>
+                                    )}
+                                    {activeDraft.isPaid && (
+                                      <span className="font-medium">{material.quantity}</span>
+                                    )}
+                                    <span className="text-slate-500 text-xs ml-0.5 w-8">{unitLabel}</span>
+                                    {!activeDraft.isPaid && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeOptionalSessionMaterial(
+                                            activeDraft.id,
+                                            material.materialId
+                                          )
+                                        }
+                                        className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-500"
+                                        title="Remove"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {optRemarks.length > 0 && (
+                          <div className="rounded-md bg-slate-50/90 border border-slate-200/80 px-2 py-1.5 mb-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5">
+                              Remarks
+                            </p>
+                            <p className="text-xs text-slate-700 whitespace-pre-wrap">{optRemarks}</p>
+                          </div>
+                        )}
+                      </div>
                     );
                   })()}
                 </div>
@@ -726,6 +849,11 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                   onClose={() => setOptionalMaterialsModalOpen(false)}
                   initialSelection={activeDraft.optionalSessionMaterials ?? []}
                   initialRemarks={activeDraft.optionalSessionRemarks ?? ""}
+                  blockedMaterialIds={Array.from(
+                    new Set(
+                      activeDraft.items.flatMap((item) => (item.materials ?? []).map((m) => m.materialId))
+                    )
+                  )}
                   onSave={(materials, remarks) => {
                     setOptionalSessionMaterials(activeDraft.id, materials, remarks);
                   }}

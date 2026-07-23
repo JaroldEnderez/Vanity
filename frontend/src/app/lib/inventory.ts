@@ -47,6 +47,8 @@ export async function deductMaterialsForSaleCompletion(
     materialUpdates.set(row.materialId, current + row.quantity);
   }
 
+  const successfulDeductionRows: Array<{ materialId: string; quantity: number }> = [];
+
   await Promise.all(
     [...materialUpdates.entries()].map(async ([materialId, totalQuantity]) => {
       const branchMaterial = await tx.branchMaterial.findUnique({
@@ -55,7 +57,8 @@ export async function deductMaterialsForSaleCompletion(
       });
 
       if (!branchMaterial) {
-        throw new Error(`Material not found in branch inventory: ${materialId}`);
+        console.warn(`Skipping inventory deduction for missing branch material: ${materialId}`);
+        return;
       }
 
       const materialName = branchMaterial.material?.name ?? materialId;
@@ -63,9 +66,10 @@ export async function deductMaterialsForSaleCompletion(
       const availableStock = branchMaterial.stock ?? 0;
 
       if (availableStock < totalQuantity) {
-        throw new Error(
-          `Insufficient stock: ${materialName} (need ${formatQuantity(totalQuantity)}${unit ? ` ${unit}` : ""}, have ${formatQuantity(availableStock)}${unit ? ` ${unit}` : ""})`
+        console.warn(
+          `Skipping inventory deduction for insufficient stock: ${materialName} (need ${formatQuantity(totalQuantity)}${unit ? ` ${unit}` : ""}, have ${formatQuantity(availableStock)}${unit ? ` ${unit}` : ""})`
         );
+        return;
       }
 
       const updateResult = await tx.branchMaterial.updateMany({
@@ -81,20 +85,25 @@ export async function deductMaterialsForSaleCompletion(
           where: { id: branchMaterial.id },
         });
         const latestStock = latest?.stock ?? 0;
-        throw new Error(
-          `Insufficient stock: ${materialName} (need ${formatQuantity(totalQuantity)}${unit ? ` ${unit}` : ""}, have ${formatQuantity(latestStock)}${unit ? ` ${unit}` : ""})`
+        console.warn(
+          `Skipping inventory deduction for insufficient stock: ${materialName} (need ${formatQuantity(totalQuantity)}${unit ? ` ${unit}` : ""}, have ${formatQuantity(latestStock)}${unit ? ` ${unit}` : ""})`
         );
+        return;
       }
+
+      successfulDeductionRows.push({ materialId, quantity: totalQuantity });
     })
   );
 
-  await tx.inventoryMovement.createMany({
-    data: saleMaterials.map((sm) => ({
-      branchId,
-      materialId: sm.materialId,
-      quantity: sm.quantity,
-      type: "OUT",
-      referenceId: saleId,
-    })),
-  });
+  if (successfulDeductionRows.length > 0) {
+    await tx.inventoryMovement.createMany({
+      data: successfulDeductionRows.map((sm) => ({
+        branchId,
+        materialId: sm.materialId,
+        quantity: sm.quantity,
+        type: "OUT",
+        referenceId: saleId,
+      })),
+    });
+  }
 }

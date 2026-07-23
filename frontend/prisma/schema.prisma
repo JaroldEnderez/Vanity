@@ -222,6 +222,7 @@ model SaleService {
 
   sale      Sale     @relation(fields: [saleId], references: [id])
   service   Service  @relation(fields: [serviceId], references: [id])
+  saleMaterials SaleMaterial[]
 
   createdAt DateTime @default(now())
 
@@ -229,14 +230,17 @@ model SaleService {
 }
 
 model SaleMaterial {
-  id         String   @id @default(uuid())
-  saleId     String
-  materialId String
-  quantity   Float
-  material   Material @relation(fields: [materialId], references: [id])
-  sale       Sale     @relation(fields: [saleId], references: [id])
+  id            String      @id @default(uuid())
+  saleId        String
+  saleServiceId String?     
+  materialId    String
+  quantity      Float
+  material      Material    @relation(fields: [materialId], references: [id])
+  sale          Sale        @relation(fields: [saleId], references: [id])
+  saleService   SaleService? @relation(fields: [saleServiceId], references: [id])
 
   @@index([saleId, materialId]) // Optimize material lookups per sale
+  @@index([saleServiceId])
 }
 
 model Customer {

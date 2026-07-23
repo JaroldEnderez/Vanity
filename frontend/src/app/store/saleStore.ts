@@ -136,9 +136,11 @@ type SaleStore = {
   // Material management (optimistic + debounced)
   updateItemMaterial: (
     draftId: string,
+    itemId: string,
     materialId: string,
     quantity: number
   ) => void;
+  removeItemMaterial: (draftId: string, itemId: string, materialId: string) => void;
 
   /** Replace optional session materials + remarks (from modal or clear) */
   setOptionalSessionMaterials: (
@@ -184,24 +186,30 @@ function dbSessionToDraft(session: any): DraftSale {
         price: ss.price,
         qty: ss.qty,
         durationMin: ss.service?.durationMin || undefined,
-        materials: (ss.service?.materials || []).map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (sm: any): DraftMaterial => {
-          // Find actual quantity from saleMaterials if exists
-          const saleMaterial = (session.saleMaterials || []).find(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (m: any) => m.materialId === sm.materialId
-          );
-          return {
-            materialId: sm.materialId,
-            name: sm.material?.name || "Unknown Material",
-            unit: sm.material?.unit || "pcs",
-            quantity: saleMaterial?.quantity || sm.quantity,
-            packageAmount: sm.material?.packageAmount ?? null,
-            packageMeasure: sm.material?.packageMeasure ?? null,
-          };
-        }
-      ),
+        materials:
+        (ss.saleMaterials || []).length > 0
+          ? (ss.saleMaterials || []).map(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (sm: any): DraftMaterial => ({
+                materialId: sm.materialId,
+                name: sm.material?.name || "Unknown Material",
+                unit: sm.material?.unit || "pcs",
+                quantity: sm.quantity,
+                packageAmount: sm.material?.packageAmount ?? null,
+                packageMeasure: sm.material?.packageMeasure ?? null,
+              })
+            )
+          : (ss.service?.materials || []).map(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (sm: any): DraftMaterial => ({
+                materialId: sm.materialId,
+                name: sm.material?.name || "Unknown Material",
+                unit: sm.material?.unit || "pcs",
+                quantity: sm.quantity * ss.qty,
+                packageAmount: sm.material?.packageAmount ?? null,
+                packageMeasure: sm.material?.packageMeasure ?? null,
+              })
+            ),
         coloringDetails,
       };
     }
@@ -698,21 +706,24 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
   },
 
   // Optimistic + debounced
-  updateItemMaterial: (draftId, materialId, quantity) => {
+  updateItemMaterial: (draftId, itemId, materialId, quantity) => {
     // Immediate UI update
     set((state) => {
       const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
       if (draftIndex === -1) return state;
 
       const draft = state.draftSales[draftIndex];
-      const updatedItems = draft.items.map((item) => ({
-        ...item,
-        materials: item.materials?.map((m) => {
-          if (m.materialId !== materialId) return m;
-          const min = minSaleMaterialQuantity(m);
-          return { ...m, quantity: Math.max(min, quantity) };
-        }),
-      }));
+      const updatedItems = draft.items.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          materials: item.materials?.map((m) => {
+            if (m.materialId !== materialId) return m;
+            const min = minSaleMaterialQuantity(m);
+            return { ...m, quantity: Math.max(min, quantity) };
+          }),
+        };
+      });
 
       const updatedDrafts = [...state.draftSales];
       updatedDrafts[draftIndex] = { ...draft, items: updatedItems };
@@ -723,11 +734,15 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
     queueSave(
       draftId,
       async () => {
-        const res = await fetch(`/api/sessions/${draftId}/materials/${materialId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ quantity }),
-        });
+        if (itemId.startsWith("temp-")) return;
+        const res = await fetch(
+          `/api/sessions/${draftId}/items/${itemId}/materials/${materialId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quantity }),
+          }
+        );
         if (!res.ok) {
           const data = await res.json().catch(() => null);
           const msg =
@@ -735,6 +750,51 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
             typeof (data as { error: unknown }).error === "string"
               ? (data as { error: string }).error
               : `Failed to update material (${res.status})`;
+          throw new Error(msg);
+        }
+      },
+      async () => {
+        await refreshDraftFromServer(draftId);
+      }
+    );
+  },
+
+  removeItemMaterial: (draftId, itemId, materialId) => {
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+
+      const draft = state.draftSales[draftIndex];
+      const updatedItems = draft.items.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          materials: (item.materials ?? []).filter((m) => m.materialId !== materialId),
+        };
+      });
+
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = { ...draft, items: updatedItems };
+      return { draftSales: updatedDrafts };
+    });
+
+    queueSave(
+      draftId,
+      async () => {
+        if (itemId.startsWith("temp-")) return;
+        const res = await fetch(
+          `/api/sessions/${draftId}/items/${itemId}/materials/${materialId}`,
+          {
+            method: "DELETE",
+          }
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          const msg =
+            typeof data === "object" && data !== null && "error" in data &&
+            typeof (data as { error: unknown }).error === "string"
+              ? (data as { error: string }).error
+              : `Failed to remove material (${res.status})`;
           throw new Error(msg);
         }
       },

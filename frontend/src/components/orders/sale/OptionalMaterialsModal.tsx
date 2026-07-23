@@ -24,6 +24,7 @@ type Props = {
   onClose: () => void;
   initialSelection: DraftMaterial[];
   initialRemarks?: string;
+  blockedMaterialIds?: string[];
   onSave: (materials: DraftMaterial[], remarks: string) => void;
 };
 
@@ -43,6 +44,7 @@ export default function OptionalMaterialsModal({
   onClose,
   initialSelection,
   initialRemarks = "",
+  blockedMaterialIds = [],
   onSave,
 }: Props) {
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
@@ -50,10 +52,16 @@ export default function OptionalMaterialsModal({
   const [selected, setSelected] = useState<DraftMaterial[]>([]);
   const [remarks, setRemarks] = useState("");
 
+  const blockedIds = useMemo(() => new Set(blockedMaterialIds), [blockedMaterialIds]);
+
   useEffect(() => {
     if (!open) return;
     setSearch("");
-    setSelected(initialSelection.map((m) => ({ ...m })));
+    setSelected(
+      initialSelection
+        .filter((m) => !blockedIds.has(m.materialId))
+        .map((m) => ({ ...m }))
+    );
     setRemarks(initialRemarks);
     fetch("/api/materials")
       .then((res) => res.json())
@@ -67,13 +75,14 @@ export default function OptionalMaterialsModal({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return inventory;
-    return inventory.filter(
+    const base = inventory.filter((m) => !blockedIds.has(m.id));
+    if (!q) return base;
+    return base.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
         m.unit.toLowerCase().includes(q)
     );
-  }, [inventory, search]);
+  }, [blockedIds, inventory, search]);
 
   const selectedIds = useMemo(
     () => new Set(selected.map((s) => s.materialId)),
@@ -81,7 +90,7 @@ export default function OptionalMaterialsModal({
   );
 
   const addFromInventory = (inv: InventoryRow) => {
-    if (selectedIds.has(inv.id)) return;
+    if (selectedIds.has(inv.id) || blockedIds.has(inv.id)) return;
     const d = toDraft(inv, 1);
     const minQ = minSaleMaterialQuantity(d);
     setSelected((s) => [...s, { ...d, quantity: minQ }]);
@@ -151,14 +160,16 @@ export default function OptionalMaterialsModal({
             <ul className="divide-y divide-slate-100">
               {filtered.map((m) => {
                 const added = selectedIds.has(m.id);
+                const blocked = blockedIds.has(m.id);
+                const disabled = added || blocked;
                 return (
                   <li key={m.id}>
                     <button
                       type="button"
-                      disabled={added}
+                      disabled={disabled}
                       onClick={() => addFromInventory(m)}
                       className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition ${
-                        added
+                        disabled
                           ? "bg-slate-50 text-slate-400 cursor-not-allowed"
                           : "hover:bg-emerald-50 text-slate-800"
                       }`}
@@ -166,9 +177,9 @@ export default function OptionalMaterialsModal({
                       <span className="truncate font-medium">{m.name}</span>
                       <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
                         <span>
-                          Stock {m.stock} {m.unit}
+                          {blocked ? "Included" : `Stock ${m.stock} ${m.unit}`}
                         </span>
-                        {!added && <Plus size={14} className="text-emerald-600" />}
+                        {!disabled && <Plus size={14} className="text-emerald-600" />}
                       </span>
                     </button>
                   </li>

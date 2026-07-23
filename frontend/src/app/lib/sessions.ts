@@ -33,6 +33,19 @@ const sessionInclude = {
           },
         },
       },
+      saleMaterials: {
+        include: {
+          material: {
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              packageAmount: true,
+              packageMeasure: true,
+            },
+          },
+        },
+      },
     },
   },
   saleAddOns: {
@@ -199,7 +212,7 @@ export async function addItemToSession(
       }));
     }
 
-    await tx.saleService.create({
+    const saleService = await tx.saleService.create({
       data: {
         saleId: sessionId,
         serviceId: item.serviceId,
@@ -217,6 +230,7 @@ export async function addItemToSession(
       await tx.saleMaterial.createMany({
         data: materialsToCreate.map((m) => ({
           saleId: sessionId,
+          saleServiceId: saleService.id,
           materialId: m.materialId,
           quantity: m.quantity,
         })),
@@ -265,18 +279,11 @@ export async function removeItemFromSession(sessionId: string, itemId: string) {
       throw new Error("Cannot modify completed or cancelled session");
     }
 
-    // Get the service to find related materials - only fetch materialIds
+    // Get the service item to find related line materials
     const saleService = await tx.saleService.findUnique({
       where: { id: itemId },
       select: {
         id: true,
-        service: {
-          select: {
-            materials: {
-              select: { materialId: true }, // Only fetch materialId
-            },
-          },
-        },
       },
     });
 
@@ -284,16 +291,13 @@ export async function removeItemFromSession(sessionId: string, itemId: string) {
       throw new Error("Item not found");
     }
 
-    // Remove related materials for this service
-    const materialIds = saleService.service.materials.map((m) => m.materialId);
-    if (materialIds.length > 0) {
-      await tx.saleMaterial.deleteMany({
-        where: {
-          saleId: sessionId,
-          materialId: { in: materialIds },
-        },
-      });
-    }
+    // Remove related materials for this service line
+    await tx.saleMaterial.deleteMany({
+      where: {
+        saleId: sessionId,
+        saleServiceId: saleService.id,
+      },
+    });
 
     // Delete the service item
     await tx.saleService.delete({ where: { id: itemId } });
@@ -361,6 +365,80 @@ export async function updateSessionMaterial(
     }
 
     // Return full session
+    return tx.sale.findUnique({
+      where: { id: sessionId },
+      include: sessionInclude,
+    });
+  }, interactiveTxOptions);
+}
+
+// UPDATE line item material quantity by service line
+export async function updateSessionItemMaterial(
+  sessionId: string,
+  itemId: string,
+  materialId: string,
+  quantity: number
+) {
+  return db.$transaction(async (tx) => {
+    const session = await tx.sale.findUnique({
+      where: { id: sessionId },
+      select: { id: true, status: true },
+    });
+
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    if (session.status !== SaleStatus.DRAFT) {
+      throw new Error("Cannot modify completed or cancelled session");
+    }
+
+    const saleMaterial = await tx.saleMaterial.findFirst({
+      where: {
+        saleId: sessionId,
+        saleServiceId: itemId,
+        materialId,
+      },
+      select: { id: true },
+    });
+
+    if (saleMaterial) {
+      await tx.saleMaterial.update({
+        where: { id: saleMaterial.id },
+        data: { quantity },
+      });
+    }
+
+    return tx.sale.findUnique({
+      where: { id: sessionId },
+      include: sessionInclude,
+    });
+  }, interactiveTxOptions);
+}
+
+export async function removeSessionItemMaterial(sessionId: string, itemId: string, materialId: string) {
+  return db.$transaction(async (tx) => {
+    const session = await tx.sale.findUnique({
+      where: { id: sessionId },
+      select: { id: true, status: true },
+    });
+
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    if (session.status !== SaleStatus.DRAFT) {
+      throw new Error("Cannot modify completed or cancelled session");
+    }
+
+    await tx.saleMaterial.deleteMany({
+      where: {
+        saleId: sessionId,
+        saleServiceId: itemId,
+        materialId,
+      },
+    });
+
     return tx.sale.findUnique({
       where: { id: sessionId },
       include: sessionInclude,

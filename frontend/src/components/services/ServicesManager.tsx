@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Plus, Pencil, Trash2, X, Check, Clock, Download, Loader2 } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
 import { formatStockDisplayText, hasPackageMaterial } from "@/src/app/lib/materialPackage";
+import type { PackageMeasure } from "@prisma/client";
 import {
   DEFAULT_SERVICE_CATEGORY,
   SERVICE_CATEGORIES,
@@ -70,7 +71,7 @@ export default function ServicesManager({ initialServices }: Props) {
   const [materialsModalRows, setMaterialsModalRows] = useState<Array<{ id?: string; materialId: string; quantity: number; material?: any }>>([]);
   const [materialsModalLoading, setMaterialsModalLoading] = useState(false);
   const [materialsModalSaving, setMaterialsModalSaving] = useState(false);
-  const [materialsOptions, setMaterialsOptions] = useState<Array<{ id: string; name: string; unit: string; sku?: string; stock?: number }>>([]);
+  const [materialsOptions, setMaterialsOptions] = useState<Array<{ id: string; name: string; unit: string; sku?: string; stock?: number; packageAmount?: number | null; packageMeasure?: PackageMeasure | null }>>([]);
   const [addServiceError, setAddServiceError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
 
