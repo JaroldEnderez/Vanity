@@ -26,16 +26,50 @@ export async function getAllServices() {
 }
 
 export async function getServices(branchId?: string) {
+  if (!branchId) {
+    return db.service.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        hairColoringFlow: true,
+        description: true,
+        durationMin: true,
+        price: true,
+        isActive: true,
+        branchId: true,
+        usesMaterials: true,
+        materials: {
+          include: {
+            material: {
+              select: {
+                id: true,
+                name: true,
+                unit: true,
+                packageAmount: true,
+                packageMeasure: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  const branchOwnedCount = await db.service.count({
+    where: { branchId, isActive: true },
+  });
+
+  // Prefer branch-owned catalog when present (avoids duplicates with shared globals).
+  const where =
+    branchOwnedCount > 0
+      ? { isActive: true, branchId }
+      : { isActive: true, OR: [{ branchId }, { branchId: null }] };
+
   return db.service.findMany({
-    where: {
-      isActive: true,
-      // Show services that belong to this branch OR are shared (no branchId)
-      ...(branchId
-        ? {
-            OR: [{ branchId }, { branchId: null }],
-          }
-        : {}),
-    },
+    where,
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -67,11 +101,17 @@ export async function getServices(branchId?: string) {
 
 /** Branch-scoped list with full include (for Products page and GET /api/services). */
 export async function getServicesForBranch(branchId: string) {
+  const branchOwnedCount = await db.service.count({
+    where: { branchId, isActive: true },
+  });
+
+  const where =
+    branchOwnedCount > 0
+      ? { isActive: true, branchId }
+      : { isActive: true, OR: [{ branchId }, { branchId: null }] };
+
   return db.service.findMany({
-    where: {
-      isActive: true,
-      OR: [{ branchId }, { branchId: null }],
-    },
+    where,
     orderBy: { name: "asc" },
     include: {
       materials: {

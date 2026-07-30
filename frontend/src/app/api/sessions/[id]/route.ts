@@ -57,6 +57,8 @@ export async function PATCH(
       name?: string;
       customerId?: string;
       staffId?: string;
+      discountPercent?: number;
+      discountLabel?: string | null;
       optionalMaterials?: unknown | null;
     } = {};
     if (typeof body.name === "string") {
@@ -71,6 +73,30 @@ export async function PATCH(
         cid === null || cid === undefined || cid === ""
           ? WALK_IN_CUSTOMER_ID
           : String(cid).trim();
+    }
+
+    if ("discountPercent" in body) {
+      const n = Number(body.discountPercent);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return NextResponse.json(
+          { error: "discountPercent must be a number between 0 and 100" },
+          { status: 400 }
+        );
+      }
+      data.discountPercent = n;
+    }
+    if ("discountLabel" in body) {
+      const raw = body.discountLabel;
+      if (raw === null || raw === undefined) {
+        data.discountLabel = null;
+      } else if (typeof raw === "string") {
+        data.discountLabel = raw.trim() || null;
+      } else {
+        return NextResponse.json(
+          { error: "discountLabel must be a string or null" },
+          { status: 400 }
+        );
+      }
     }
 
     if ("optionalMaterials" in body) {

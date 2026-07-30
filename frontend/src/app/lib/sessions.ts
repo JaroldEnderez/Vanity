@@ -5,6 +5,7 @@ import {
   resolveMaterialsFromServiceRecipes,
 } from "./inventory";
 import { optionalJsonToDeductionRows } from "./optionalSessionMaterials";
+import { applyPercentDiscount, normalizeDiscountLabel } from "./discount";
 import { SaleStatus } from "@prisma/client";
 
 // Optimized include - only fetch what's needed
@@ -112,13 +113,15 @@ export async function createSession(data: {
   });
 }
 
-// UPDATE session (name, customer, staff, optionalMaterials JSON, etc.)
+// UPDATE session (name, customer, staff, discount, optionalMaterials JSON, etc.)
 export async function updateSession(
   id: string,
   data: Partial<{
     name: string;
     customerId: string;
     staffId: string;
+    discountPercent: number;
+    discountLabel: string | null;
     optionalMaterials: unknown | null;
   }>
 ) {
@@ -133,11 +136,32 @@ export async function updateSession(
         : (data.optionalMaterials as Prisma.InputJsonValue);
   }
 
-  return db.sale.update({
+  const discountTouched =
+    data.discountPercent !== undefined || data.discountLabel !== undefined;
+  if (discountTouched) {
+    if (data.discountPercent !== undefined) {
+      updateData.discountPercent = Math.max(0, Math.min(100, data.discountPercent));
+    }
+    if (data.discountLabel !== undefined) {
+      updateData.discountLabel = normalizeDiscountLabel(data.discountLabel);
+    }
+  }
+
+  const session = await db.sale.update({
     where: { id },
     data: updateData,
     include: sessionInclude,
   });
+
+  if (discountTouched) {
+    await recalculateSessionTotals(id);
+    return db.sale.findUniqueOrThrow({
+      where: { id },
+      include: sessionInclude,
+    });
+  }
+
+  return session;
 }
 
 // DELETE session (only if DRAFT) - Optimized with transaction
@@ -456,6 +480,8 @@ export async function checkoutSession(id: string, cashReceived?: number) {
         status: true,
         branchId: true,
         optionalMaterials: true,
+        discountPercent: true,
+        discountLabel: true,
         saleServices: true,
         saleAddOns: true,
         saleMaterials: true,
@@ -475,7 +501,11 @@ export async function checkoutSession(id: string, cashReceived?: number) {
       0
     );
     const addOnsTotal = session.saleAddOns.reduce((sum, sa) => sum + sa.price, 0);
-    const total = basePrice + addOnsTotal;
+    const subtotal = basePrice + addOnsTotal;
+    const { discountPercent, discountAmount, total } = applyPercentDiscount(
+      subtotal,
+      session.discountPercent
+    );
     const changeGiven = cashReceived !== undefined ? cashReceived - total : null;
 
     let materialsToDeduct = session.saleMaterials.map((m) => ({
@@ -510,6 +540,9 @@ export async function checkoutSession(id: string, cashReceived?: number) {
         endedAt: new Date(),
         basePrice,
         addOns: addOnsTotal,
+        discountPercent,
+        discountLabel: normalizeDiscountLabel(session.discountLabel),
+        discountAmount,
         total,
         cashReceived: cashReceived ?? null,
         changeGiven,
@@ -554,7 +587,7 @@ export async function cancelSession(id: string) {
 // Helper: Recalculate session totals - Optimized with single query
 async function recalculateSessionTotals(sessionId: string) {
   // Fetch both in parallel instead of sequentially
-  const [services, addOns] = await Promise.all([
+  const [services, addOns, sale] = await Promise.all([
     db.saleService.findMany({
       where: { saleId: sessionId },
       select: { price: true, qty: true }, // Only fetch needed fields
@@ -563,14 +596,22 @@ async function recalculateSessionTotals(sessionId: string) {
       where: { saleId: sessionId },
       select: { price: true }, // Only fetch needed fields
     }),
+    db.sale.findUnique({
+      where: { id: sessionId },
+      select: { discountPercent: true },
+    }),
   ]);
 
   const basePrice = services.reduce((sum, s) => sum + s.price * s.qty, 0);
   const addOnsTotal = addOns.reduce((sum, a) => sum + a.price, 0);
-  const total = basePrice + addOnsTotal;
+  const subtotal = basePrice + addOnsTotal;
+  const { discountPercent, discountAmount, total } = applyPercentDiscount(
+    subtotal,
+    sale?.discountPercent
+  );
 
   await db.sale.update({
     where: { id: sessionId },
-    data: { basePrice, addOns: addOnsTotal, total },
+    data: { basePrice, addOns: addOnsTotal, discountPercent, discountAmount, total },
   });
 }

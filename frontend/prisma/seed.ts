@@ -47,31 +47,44 @@ async function upsertCustomer(name: string, phone?: string) {
 
 async function main(){
     console.log("Seeding branches...")
+
+    // Owner first so branches can reference ownerId
+    console.log("Seeding owner account...");
+    const ownerPassword = await bcrypt.hash("owner123", 10);
+    const owner = await db.ownerAccount.upsert({
+        where: { email: "owner@vanity.com" },
+        update: {},
+        create: { email: "owner@vanity.com", password: ownerPassword },
+    });
+    console.log("Owner account: owner@vanity.com (password: owner123)");
     
     // Create branches with distinct names
     const branches = await Promise.all([
         db.branch.upsert({
             where: { name: "Downtown Plaza" },
-            update: {},
+            update: { ownerId: owner.id },
             create: {
                 name: "Downtown Plaza",
                 address: "123 Main Street, Downtown District",
+                ownerId: owner.id,
             }
         }),
         db.branch.upsert({
             where: { name: "Mall of Elegance" },
-            update: {},
+            update: { ownerId: owner.id },
             create: {
                 name: "Mall of Elegance",
                 address: "456 Fashion Avenue, Shopping Center",
+                ownerId: owner.id,
             }
         }),
         db.branch.upsert({
             where: { name: "Riverside Salon" },
-            update: {},
+            update: { ownerId: owner.id },
             create: {
                 name: "Riverside Salon",
                 address: "789 River Road, Waterfront Area",
+                ownerId: owner.id,
             }
         }),
     ]);
@@ -79,19 +92,7 @@ async function main(){
     console.log(`Created ${branches.length} branches`);
 
     // ============================================
-    // OWNER ACCOUNT (separate from branches)
-    // ============================================
-    console.log("Seeding owner account...");
-    const ownerPassword = await bcrypt.hash("owner123", 10);
-    await db.ownerAccount.upsert({
-        where: { email: "owner@vanity.com" },
-        update: {},
-        create: { email: "owner@vanity.com", password: ownerPassword },
-    });
-    console.log("Owner account: owner@vanity.com (password: owner123)");
-
-    // ============================================
-    // BRANCH ACCOUNTS (one login per branch)
+    // BRANCH ACCOUNTS (legacy login per branch — kept for testing)
     // ============================================
     console.log("Seeding branch accounts...")
     

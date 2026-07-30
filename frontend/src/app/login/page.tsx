@@ -136,7 +136,11 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-slate-500 text-sm mt-6">
-          Contact your administrator for branch account access
+          Owner and branch accounts sign in here.{" "}
+          <a href="/pos" className="text-emerald-400 hover:text-emerald-300">
+            Activate POS
+          </a>{" "}
+          with a code from the owner dashboard.
         </p>
       </div>
     </div>

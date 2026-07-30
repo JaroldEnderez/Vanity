@@ -14,11 +14,13 @@ generator client {
 
 
 model Branch {
-  id                 String              @id @default(uuid())
-  name               String              @unique
-  address            String
-  lastActiveAt       DateTime?           // For owner view: online if updated in last 5 min
-  createdAt          DateTime            @default(now())
+  id                 String                 @id @default(uuid())
+  name               String                 @unique
+  address            String                 @default("")
+  ownerId            String?
+  lastActiveAt       DateTime?              // For owner view: online if updated in last 5 min
+  createdAt          DateTime               @default(now())
+  owner              OwnerAccount?          @relation(fields: [ownerId], references: [id])
   sales              Sale[]
   services           Service[]
   staff              Staff[]
@@ -27,6 +29,10 @@ model Branch {
   branchMaterials    BranchMaterial[]
   inventoryMovements InventoryMovement[]
   materials          Material[]
+  terminals          Terminal[]
+  activationCodes    BranchActivationCode[]
+
+  @@index([ownerId])
 }
 
 model BranchAccount {
@@ -43,6 +49,40 @@ model OwnerAccount {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
+  branches  Branch[]
+}
+
+/// Activated POS device for a branch. A branch may have multiple terminals.
+model Terminal {
+  id             String                 @id @default(uuid())
+  branchId       String
+  name           String                 @default("POS Terminal")
+  activatedAt    DateTime               @default(now())
+  lastSeenAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  branch         Branch                 @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  activationCode BranchActivationCode?
+
+  @@index([branchId])
+  @@index([branchId, revokedAt])
+}
+
+/// One-time activation code for pairing a POS terminal. Raw token is never stored.
+model BranchActivationCode {
+  id         String    @id @default(uuid())
+  branchId   String
+  tokenHash  String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  usedAt     DateTime?
+  terminalId String?   @unique
+  createdAt  DateTime  @default(now())
+  branch     Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  terminal   Terminal? @relation(fields: [terminalId], references: [id], onDelete: SetNull)
+
+  @@index([branchId])
+  @@index([tokenHash])
 }
 
 model Staff {
@@ -59,7 +99,7 @@ model Staff {
 
 model Service {
   id            String            @id @default(uuid())
-  name          String            @unique
+  name          String
   category      ServiceCategory   @default(HAIR)
   /// When true, POS uses the hair coloring line UI (color, developer, hide per-line recipe list).
   hairColoringFlow Boolean        @default(false)
@@ -75,6 +115,7 @@ model Service {
   Branch        Branch?           @relation(fields: [branchId], references: [id])
   materials     ServiceMaterial[]
 
+  @@unique([branchId, name])
   @@index([isActive, branchId]) // Optimize service queries
   @@index([category])
 }
@@ -171,6 +212,11 @@ model Sale {
 
   basePrice  Float         @default(0)
   addOns     Float         @default(0)
+  /// Percentage off subtotal (0–100). Amount is derived at recalc/checkout.
+  discountPercent Float    @default(0)
+  /// Label for the discount reason, e.g. PROMO, SENIOR CITIZEN (snapshot text).
+  discountLabel   String?
+  discountAmount  Float    @default(0)
   total      Float         @default(0)
 
   cashReceived Float?      // Cash given by customer
@@ -252,6 +298,13 @@ model Customer {
   dateOfBirth DateTime?
   createdAt   DateTime  @default(now())
   sales       Sale[]
+}
+
+/// Reusable discount reason names (PROMO, SENIOR CITIZEN, etc.). Percent is always entered per sale.
+model DiscountLabel {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
 }
 
 model Payment {

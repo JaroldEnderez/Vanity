@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireOwner } from "@/src/app/lib/auth-utils";
-import { getBranchInventory } from "@/src/app/lib/owner";
+import { assertBranchOwnedBy, getBranchInventory } from "@/src/app/lib/owner";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireOwner();
+    const session = await requireOwner();
     const { id } = await params;
+    const owned = await assertBranchOwnedBy(id, session.user.id);
+    if (!owned) {
+      return NextResponse.json({ error: "Branch not found" }, { status: 404 });
+    }
     const inventory = await getBranchInventory(id);
     return NextResponse.json(inventory);
   } catch (error) {

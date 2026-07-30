@@ -42,7 +42,9 @@ export default function Sidebar({ onClose }: Props) {
 
   const handleLogoutConfirm = () => {
     setShowLogoutConfirm(false);
-    signOut({ callbackUrl: "/login" });
+    const callbackUrl =
+      session?.user?.role === "terminal" ? "/pos" : "/login";
+    signOut({ callbackUrl });
   };
 
   const handleLinkClick = () => {

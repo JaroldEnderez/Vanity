@@ -4,6 +4,10 @@ import { useToastStore } from "./toastStore";
 import { WALK_IN_CUSTOMER_ID, WALK_IN_CUSTOMER_NAME } from "@/src/app/lib/walkInCustomer";
 import { minSaleMaterialQuantity } from "@/src/app/lib/materialPackage";
 import {
+  applyPercentDiscount,
+  normalizeDiscountLabel,
+} from "@/src/app/lib/discount";
+import {
   parseOptionalMaterialsJson,
   parseOptionalSessionRemarks,
   serializeOptionalMaterialsForApi,
@@ -66,6 +70,9 @@ export type DraftSale = {
   optionalSessionMaterials: DraftMaterial[];
   /** Session notes (same JSON field as optional materials) */
   optionalSessionRemarks: string;
+  discountPercent: number;
+  discountLabel: string | null;
+  discountAmount: number;
   subtotal: number;
   total: number;
   createdAt: string;
@@ -112,6 +119,10 @@ type SaleStore = {
   updateDraftCustomer: (
     draftId: string,
     customer: { id: string; name: string; phone?: string | null } | null
+  ) => void;
+  updateDraftDiscount: (
+    draftId: string,
+    discount: { percent: number; label: string | null }
   ) => void;
   removeDraft: (draftId: string) => void;
   clearAllDrafts: () => void;
@@ -217,6 +228,9 @@ function dbSessionToDraft(session: any): DraftSale {
 
   // Calculate totals from items (don't trust DB values which may be stale)
   const subtotal = items.reduce((sum: number, item: DraftSaleItem) => sum + item.price * item.qty, 0);
+  const discountPercent = Number(session.discountPercent ?? 0) || 0;
+  const discountLabel = normalizeDiscountLabel(session.discountLabel);
+  const { discountAmount, total } = applyPercentDiscount(subtotal, discountPercent);
 
   const resolvedCustomerId = session.customer?.id ?? session.customerId ?? null;
   const useWalkIn = !resolvedCustomerId;
@@ -237,8 +251,11 @@ function dbSessionToDraft(session: any): DraftSale {
     items,
     optionalSessionMaterials: parseOptionalMaterialsJson(session.optionalMaterials),
     optionalSessionRemarks: parseOptionalSessionRemarks(session.optionalMaterials),
+    discountPercent,
+    discountLabel,
+    discountAmount,
     subtotal,
-    total: subtotal,
+    total,
     createdAt: session.createdAt,
   };
 }
@@ -246,7 +263,17 @@ function dbSessionToDraft(session: any): DraftSale {
 // Helper: Calculate totals for a draft
 function recalculateTotals(draft: DraftSale): DraftSale {
   const subtotal = draft.items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  return { ...draft, subtotal, total: subtotal };
+  const { discountPercent, discountAmount, total } = applyPercentDiscount(
+    subtotal,
+    draft.discountPercent
+  );
+  return {
+    ...draft,
+    discountPercent,
+    discountAmount,
+    subtotal,
+    total,
+  };
 }
 
 // Generate temporary ID for optimistic items
@@ -556,6 +583,45 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customerId: effective.id }),
+      });
+    });
+  },
+
+  // Optimistic + debounced
+  updateDraftDiscount: (draftId, discount) => {
+    const percent = Math.max(0, Math.min(100, Number(discount.percent) || 0));
+    const label =
+      typeof discount.label === "string"
+        ? discount.label.trim() === ""
+          ? null
+          : discount.label
+        : null;
+    const labelForApi = normalizeDiscountLabel(label);
+
+    set((state) => {
+      const draftIndex = state.draftSales.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) return state;
+
+      const draft = state.draftSales[draftIndex];
+      const updatedDraft = recalculateTotals({
+        ...draft,
+        discountPercent: percent,
+        discountLabel: label,
+      });
+
+      const updatedDrafts = [...state.draftSales];
+      updatedDrafts[draftIndex] = updatedDraft;
+      return { draftSales: updatedDrafts };
+    });
+
+    queueSave(draftId, async () => {
+      await fetch(`/api/sessions/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discountPercent: percent,
+          discountLabel: labelForApi,
+        }),
       });
     });
   },
@@ -918,7 +984,15 @@ export const useSaleStore = create<SaleStore>((set, get) => ({
         body: JSON.stringify({ cashReceived }),
       });
 
-      if (!res.ok) throw new Error("Failed to checkout");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const message =
+          typeof data === "object" && data !== null && "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : `Failed to checkout (${res.status})`;
+        throw new Error(message);
+      }
 
       // Remove from drafts after successful checkout
       set((state) => {

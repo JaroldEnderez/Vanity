@@ -4,8 +4,8 @@ import { getOwnerSummary } from "@/src/app/lib/owner";
 
 export async function GET() {
   try {
-    await requireOwner();
-    const summary = await getOwnerSummary();
+    const session = await requireOwner();
+    const summary = await getOwnerSummary(session.user.id);
     return NextResponse.json(summary);
   } catch (error) {
     if ((error as Error).message === "Unauthorized") {

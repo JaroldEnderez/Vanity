@@ -33,6 +33,9 @@ type Sale = {
   total: number;
   basePrice: number;
   addOns: number;
+  discountPercent?: number;
+  discountLabel?: string | null;
+  discountAmount?: number;
   cashReceived?: number | null;
   changeGiven?: number | null;
   createdAt: Date;
@@ -293,6 +296,16 @@ function SaleHistoryItem({ sale, index }: { sale: Sale; index: number }) {
               <div className="flex justify-between">
                 <span className="text-slate-500">Add-ons</span>
                 <span>{formatPHP(sale.addOns)}</span>
+              </div>
+            )}
+            {(sale.discountAmount ?? 0) > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <span>
+                  Discount
+                  {sale.discountPercent ? ` (${sale.discountPercent}%)` : ""}
+                  {sale.discountLabel ? ` · ${sale.discountLabel}` : ""}
+                </span>
+                <span>−{formatPHP(sale.discountAmount ?? 0)}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold text-slate-900">

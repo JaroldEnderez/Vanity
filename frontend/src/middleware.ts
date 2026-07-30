@@ -13,12 +13,21 @@ export async function middleware(req: NextRequest) {
   });
 
   const isLoggedIn = !!token;
-  const role = token?.role as "owner" | "branch" | undefined;
-  
+  const role = token?.role as "owner" | "branch" | "terminal" | undefined;
+  const hasBranchContext =
+    (role === "branch" || role === "terminal") && !!token?.branchId;
+
   const { pathname } = req.nextUrl;
 
-  // 2. Allow API auth requests
-  if (pathname.startsWith("/api/auth")) {
+  // 2. Allow API auth + public POS activation entry points
+  if (
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/pos/activate") ||
+    pathname === "/pos" ||
+    pathname.startsWith("/pos/") ||
+    pathname === "/activate" ||
+    pathname.startsWith("/activate/")
+  ) {
     return NextResponse.next();
   }
 
@@ -28,15 +37,34 @@ export async function middleware(req: NextRequest) {
   }
 
   if (isLoggedIn && pathname === "/login") {
-    const redirectUrl = role === "owner" ? "/owner" : "/dashboard/orders";
-    return NextResponse.redirect(new URL(redirectUrl, req.url));
+    if (role === "owner") {
+      return NextResponse.redirect(new URL("/owner", req.url));
+    }
+    if (role === "terminal" && hasBranchContext) {
+      return NextResponse.redirect(new URL("/pos", req.url));
+    }
+    return NextResponse.redirect(new URL("/dashboard/orders", req.url));
   }
 
-  // Owner must not use branch dashboard (branchId/branchName are undefined for owner)
+  // Owner must not use branch dashboard
   if (pathname.startsWith("/dashboard") && role === "owner") {
     return NextResponse.redirect(new URL("/owner", req.url));
   }
+
+  // Branch / terminal may use dashboard; revoked terminal (no branchId) → /pos
+  if (pathname.startsWith("/dashboard")) {
+    if (role === "terminal" && !hasBranchContext) {
+      return NextResponse.redirect(new URL("/pos", req.url));
+    }
+    if (role !== "branch" && role !== "terminal") {
+      return NextResponse.redirect(new URL("/dashboard/orders", req.url));
+    }
+  }
+
   if (pathname.startsWith("/owner") && role !== "owner") {
+    if (role === "terminal") {
+      return NextResponse.redirect(new URL("/pos", req.url));
+    }
     return NextResponse.redirect(new URL("/dashboard/orders", req.url));
   }
 

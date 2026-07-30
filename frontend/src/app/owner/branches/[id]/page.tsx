@@ -9,9 +9,9 @@ import {
   ArrowLeft,
   Building2,
   Receipt,
-  Package,
   X,
 } from "lucide-react";
+import BranchActivationPanel from "@/src/components/owner/BranchActivationPanel";
 
 type BranchDetail = {
   id: string;
@@ -180,6 +180,8 @@ export default function OwnerBranchDetailPage() {
           </span>
         </div>
       </div>
+
+      <BranchActivationPanel branchId={branch.id} />
 
       {/* Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

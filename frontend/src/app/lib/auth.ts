@@ -28,9 +28,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.sub = (user as { id: string }).id;
         token.email = (user as { email: string }).email;
-        token.role = (user as { role: string }).role;
+        token.role = (user as { role: "owner" | "branch" | "terminal" }).role;
         token.branchId = (user as { branchId?: string }).branchId;
         token.branchName = (user as { branchName?: string }).branchName;
+        token.terminalId = (user as { terminalId?: string }).terminalId;
       } else if (token.role === "branch") {
         // Keep branchId aligned with DB (avoids stale UUIDs after migrate/seed/reset).
         const { db } = await import("./db");
@@ -52,15 +53,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.branchId = undefined;
           token.branchName = undefined;
         }
+      } else if (token.role === "terminal") {
+        const { db } = await import("./db");
+        const terminalId =
+          (token.terminalId as string | undefined) || (token.sub as string);
+        const terminal = await db.terminal.findUnique({
+          where: { id: terminalId },
+          include: { branch: true },
+        });
+        if (!terminal || terminal.revokedAt) {
+          token.branchId = undefined;
+          token.branchName = undefined;
+          token.terminalId = undefined;
+          token.role = "terminal";
+        } else {
+          token.sub = terminal.id;
+          token.terminalId = terminal.id;
+          token.branchId = terminal.branchId;
+          token.branchName = terminal.branch.name;
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
-        session.user.role = (token.role as "owner" | "branch") ?? "branch";
+        session.user.role =
+          (token.role as "owner" | "branch" | "terminal") ?? "branch";
         session.user.branchId = token.branchId as string | undefined;
         session.user.branchName = token.branchName as string | undefined;
+        session.user.terminalId = token.terminalId as string | undefined;
       }
       return session;
     },
@@ -76,17 +98,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 // Type augmentation for session
 declare module "next-auth" {
   interface User {
-    role: "owner" | "branch";
+    role: "owner" | "branch" | "terminal";
     branchId?: string;
     branchName?: string;
+    terminalId?: string;
   }
   interface Session {
     user: {
       id: string;
       email: string;
-      role: "owner" | "branch";
+      role: "owner" | "branch" | "terminal";
       branchId?: string;
       branchName?: string;
+      terminalId?: string;
     };
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    role?: "owner" | "branch" | "terminal";
+    branchId?: string;
+    branchName?: string;
+    terminalId?: string;
   }
 }

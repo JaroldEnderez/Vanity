@@ -3,6 +3,7 @@ import {
   deductMaterialsForSaleCompletion,
   resolveMaterialsFromServiceRecipes,
 } from "./inventory";
+import { applyPercentDiscount } from "./discount";
 import { SaleStatus } from "@prisma/client";
 
 // GET all sales
@@ -146,13 +147,19 @@ export async function updateSale(
   // Recalculate totals
   const basePrice = data.services?.reduce((sum, s) => sum + s.price * s.qty, 0) || 0;
   const addOnsTotal = data.addOns?.reduce((sum, a) => sum + a.price, 0) || 0;
-  const total = basePrice + addOnsTotal;
+  const subtotal = basePrice + addOnsTotal;
+  const { discountPercent, discountAmount, total } = applyPercentDiscount(
+    subtotal,
+    existingSale.discountPercent
+  );
 
   return db.sale.update({
     where: { id },
     data: {
       basePrice,
       addOns: addOnsTotal,
+      discountPercent,
+      discountAmount,
       total,
       customerId: data.customerId,
 
@@ -212,7 +219,11 @@ export async function checkoutSale(id: string) {
       0
     );
     const addOnsTotal = sale.saleAddOns.reduce((sum, sa) => sum + sa.price, 0);
-    const total = basePrice + addOnsTotal;
+    const subtotal = basePrice + addOnsTotal;
+    const { discountPercent, discountAmount, total } = applyPercentDiscount(
+      subtotal,
+      sale.discountPercent
+    );
 
     let materialsToDeduct = sale.saleMaterials.map((m) => ({
       materialId: m.materialId,
@@ -241,6 +252,8 @@ export async function checkoutSale(id: string) {
         endedAt: new Date(),
         basePrice,
         addOns: addOnsTotal,
+        discountPercent,
+        discountAmount,
         total,
       },
     });

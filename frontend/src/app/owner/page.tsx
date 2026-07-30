@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DollarSign,
   Receipt,
@@ -31,6 +32,7 @@ type BranchStatus = {
   salesCountThisWeek: number;
   revenueToday: number;
   revenueThisWeek: number;
+  activationStatus?: string;
 };
 
 function formatMoney(n: number) {
@@ -41,6 +43,7 @@ function formatMoney(n: number) {
 }
 
 export default function OwnerOverviewPage() {
+  const router = useRouter();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [branches, setBranches] = useState<BranchStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +73,10 @@ export default function OwnerOverviewPage() {
           branchesRes.json(),
         ]);
         if (!cancelled) {
+          if (Array.isArray(b) && b.length === 0) {
+            router.replace("/owner/onboarding");
+            return;
+          }
           setSummary(s);
           setBranches(b);
         }
@@ -84,7 +91,7 @@ export default function OwnerOverviewPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
@@ -103,57 +110,61 @@ export default function OwnerOverviewPage() {
     );
   }
 
+  if (!summary) return null;
+
+  const cards = [
+    {
+      label: "Revenue today",
+      value: formatMoney(summary.totalRevenueToday),
+      sub: `${summary.transactionCountToday} transactions`,
+      icon: DollarSign,
+    },
+    {
+      label: "Revenue this week",
+      value: formatMoney(summary.totalRevenueThisWeek),
+      sub: `${summary.transactionCountThisWeek} transactions`,
+      icon: TrendingUp,
+    },
+    {
+      label: "Revenue this month",
+      value: formatMoney(summary.totalRevenueThisMonth),
+      sub: `${summary.transactionCountThisMonth} transactions`,
+      icon: Receipt,
+    },
+    {
+      label: "Branches",
+      value: String(summary.branchCount),
+      sub: "Active locations",
+      icon: Building2,
+    },
+  ];
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-slate-900">Overview</h1>
 
-      {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mb-1">
-            <DollarSign size={16} />
-            Revenue today
+        {cards.map(({ label, value, sub, icon: Icon }) => (
+          <div
+            key={label}
+            className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-slate-500 text-sm font-medium">{label}</p>
+              <Icon size={18} className="text-emerald-600" />
+            </div>
+            <p className="text-2xl font-bold text-slate-900">{value}</p>
+            <p className="text-slate-500 text-xs mt-1">{sub}</p>
           </div>
-          <p className="text-xl font-bold text-slate-900">
-            {summary ? formatMoney(summary.totalRevenueToday) : "—"}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mb-1">
-            <TrendingUp size={16} />
-            Revenue this week
-          </div>
-          <p className="text-xl font-bold text-slate-900">
-            {summary ? formatMoney(summary.totalRevenueThisWeek) : "—"}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mb-1">
-            <Receipt size={16} />
-            Transactions today
-          </div>
-          <p className="text-xl font-bold text-slate-900">
-            {summary?.transactionCountToday ?? "—"}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mb-1">
-            <Building2 size={16} />
-            Branches
-          </div>
-          <p className="text-xl font-bold text-slate-900">
-            {summary?.branchCount ?? "—"}
-          </p>
-        </div>
+        ))}
       </div>
 
-      {/* Branch status */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-900">Branches</h2>
           <Link
             href="/owner/branches"
-            className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
           >
             View all
           </Link>
@@ -174,14 +185,21 @@ export default function OwnerOverviewPage() {
                 <th className="text-right py-3 px-4 font-medium text-slate-700">
                   This week
                 </th>
-                <th className="w-10" />
               </tr>
             </thead>
             <tbody>
               {branches.map((b) => (
-                <tr key={b.id} className="border-b border-slate-100 last:border-0">
+                <tr
+                  key={b.id}
+                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50"
+                >
                   <td className="py-3 px-4">
-                    <span className="font-medium text-slate-900">{b.name}</span>
+                    <Link
+                      href={`/owner/branches/${b.id}`}
+                      className="font-medium text-slate-900 hover:text-emerald-700"
+                    >
+                      {b.name}
+                    </Link>
                   </td>
                   <td className="py-3 px-4">
                     <span
@@ -200,28 +218,15 @@ export default function OwnerOverviewPage() {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right text-slate-700">
-                    {formatMoney(b.revenueToday)} ({b.salesCountToday})
+                    {formatMoney(b.revenueToday)}
                   </td>
                   <td className="py-3 px-4 text-right text-slate-700">
-                    {formatMoney(b.revenueThisWeek)} ({b.salesCountThisWeek})
-                  </td>
-                  <td className="py-3 px-4">
-                    <Link
-                      href={`/owner/branches/${b.id}`}
-                      className="text-emerald-600 hover:text-emerald-700 font-medium"
-                    >
-                      View
-                    </Link>
+                    {formatMoney(b.revenueThisWeek)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {branches.length === 0 && (
-            <p className="py-8 text-center text-slate-500 text-sm">
-              No branches yet
-            </p>
-          )}
         </div>
       </div>
     </div>

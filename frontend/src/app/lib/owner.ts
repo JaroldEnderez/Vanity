@@ -85,7 +85,7 @@ function isOnline(lastActiveAt: Date | null): boolean {
 }
 
 /** Overall business health for owner dashboard */
-export async function getOwnerSummary(): Promise<OwnerSummary> {
+export async function getOwnerSummary(ownerId?: string): Promise<OwnerSummary> {
   const todayStart = startOfToday();
   const todayEnd = endOfToday();
   const weekStart = startOfWeek();
@@ -93,12 +93,28 @@ export async function getOwnerSummary(): Promise<OwnerSummary> {
   const monthStart = startOfMonth();
   const monthEnd = endOfMonth();
 
+  const branchWhere = ownerId ? { ownerId } : {};
+  const ownerBranchIds = ownerId
+    ? (
+        await db.branch.findMany({
+          where: { ownerId },
+          select: { id: true },
+        })
+      ).map((b) => b.id)
+    : undefined;
+
+  const saleBranchFilter =
+    ownerBranchIds !== undefined
+      ? { branchId: { in: ownerBranchIds } }
+      : {};
+
   const [branchCount, todaySales, weekSales, monthSales] = await Promise.all([
-    db.branch.count(),
+    db.branch.count({ where: branchWhere }),
     db.sale.findMany({
       where: {
         status: SaleStatus.COMPLETED,
         endedAt: { gte: todayStart, lte: todayEnd },
+        ...saleBranchFilter,
       },
       select: { total: true },
     }),
@@ -106,6 +122,7 @@ export async function getOwnerSummary(): Promise<OwnerSummary> {
       where: {
         status: SaleStatus.COMPLETED,
         endedAt: { gte: weekStart, lte: weekEnd },
+        ...saleBranchFilter,
       },
       select: { total: true },
     }),
@@ -113,6 +130,7 @@ export async function getOwnerSummary(): Promise<OwnerSummary> {
       where: {
         status: SaleStatus.COMPLETED,
         endedAt: { gte: monthStart, lte: monthEnd },
+        ...saleBranchFilter,
       },
       select: { total: true },
     }),
@@ -130,8 +148,11 @@ export async function getOwnerSummary(): Promise<OwnerSummary> {
 }
 
 /** All branches with status and key metrics for owner */
-export async function getBranchesWithStatus(): Promise<BranchStatus[]> {
+export async function getBranchesWithStatus(
+  ownerId?: string
+): Promise<BranchStatus[]> {
   const branches = await db.branch.findMany({
+    where: ownerId ? { ownerId } : undefined,
     orderBy: { name: "asc" },
     select: { id: true, name: true, address: true, lastActiveAt: true },
   });
@@ -191,10 +212,14 @@ export async function getBranchesWithStatus(): Promise<BranchStatus[]> {
 
 /** Single branch detail for drill-down */
 export async function getBranchDetail(
-  branchId: string
+  branchId: string,
+  ownerId?: string
 ): Promise<BranchDetail | null> {
-  const branch = await db.branch.findUnique({
-    where: { id: branchId },
+  const branch = await db.branch.findFirst({
+    where: {
+      id: branchId,
+      ...(ownerId ? { ownerId } : {}),
+    },
     select: { id: true, name: true, address: true, lastActiveAt: true },
   });
   if (!branch) return null;
@@ -246,6 +271,49 @@ export async function getBranchDetail(
     revenueThisWeek: weekSales.reduce((s, x) => s + x.total, 0),
     revenueThisMonth: monthSales.reduce((s, x) => s + x.total, 0),
   };
+}
+
+/** Create a branch for an owner and seed default catalog data. */
+export async function createBranchForOwner(
+  ownerId: string,
+  name: string,
+  address = ""
+) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Branch name is required");
+  }
+
+  const existing = await db.branch.findUnique({ where: { name: trimmed } });
+  if (existing) {
+    throw new Error("A branch with this name already exists");
+  }
+
+  const { seedBranchDefaults } = await import("./branch-seed");
+
+  const branch = await db.branch.create({
+    data: {
+      name: trimmed,
+      address: address.trim(),
+      ownerId,
+    },
+  });
+
+  await seedBranchDefaults(branch.id);
+
+  return branch;
+}
+
+/** Ensure the branch belongs to the given owner. */
+export async function assertBranchOwnedBy(
+  branchId: string,
+  ownerId: string
+): Promise<boolean> {
+  const branch = await db.branch.findFirst({
+    where: { id: branchId, ownerId },
+    select: { id: true },
+  });
+  return !!branch;
 }
 
 /** All catalog materials with this branch's stock (read-only) */

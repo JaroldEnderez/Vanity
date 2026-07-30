@@ -16,6 +16,7 @@ import {
   X,
   User,
   UserPlus,
+  Percent,
 } from "lucide-react";
 import OptionalMaterialsModal from "./OptionalMaterialsModal";
 import { formatPHP } from "@/src/app/lib/money";
@@ -117,6 +118,7 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
     );
     const updateDraftStaff = useSaleStore((state) => state.updateDraftStaff);
     const updateDraftCustomer = useSaleStore((state) => state.updateDraftCustomer);
+    const updateDraftDiscount = useSaleStore((state) => state.updateDraftDiscount);
     const removeItemFromDraft = useSaleStore((state) => state.removeItemFromDraft);
     const removeItemMaterial = useSaleStore((state) => state.removeItemMaterial);
     const checkoutDraft = useSaleStore((state) => state.checkoutDraft);
@@ -320,6 +322,24 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
         } finally {
             setRegisterSaving(false);
         }
+    };
+
+    const handleDiscountPercentChange = (raw: string) => {
+      if (!activeDraft) return;
+      const parsed = raw === "" ? 0 : Number(raw);
+      const percent = Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0;
+      updateDraftDiscount(activeDraft.id, {
+        percent,
+        label: activeDraft.discountLabel,
+      });
+    };
+
+    const handleDiscountLabelChange = (label: string) => {
+      if (!activeDraft) return;
+      updateDraftDiscount(activeDraft.id, {
+        percent: activeDraft.discountPercent,
+        label,
+      });
     };
 
     /** Walk-in counts as a valid customer for checkout */
@@ -866,11 +886,58 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
 
         {/* Fixed bottom section */}
         <div className="flex-shrink-0 border-t bg-slate-50 pt-2 md:pt-3 space-y-2 md:space-y-3 px-2 md:px-0">
+            {!activeDraft.isPaid && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-600 w-[4.75rem] shrink-0">
+                    Discount
+                  </span>
+                  <Percent size={14} className="text-slate-500 shrink-0" aria-hidden />
+                  <div className="flex flex-1 min-w-0 items-center gap-1.5">
+                    <input
+                      type="number"
+                      aria-label="Discount percent"
+                      value={activeDraft.discountPercent || ""}
+                      onChange={(e) => handleDiscountPercentChange(e.target.value)}
+                      placeholder="0"
+                      min={0}
+                      max={100}
+                      step={1}
+                      className="w-14 shrink-0 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <span className="text-xs text-slate-500 shrink-0">%</span>
+                    <input
+                      type="text"
+                      aria-label="Discount reason"
+                      value={activeDraft.discountLabel ?? ""}
+                      onChange={(e) => handleDiscountLabelChange(e.target.value)}
+                      placeholder="e.g. PROMO, SENIOR CITIZEN"
+                      className="flex-1 min-w-0 text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="text-xs md:text-sm">
                 <div className="flex justify-between">
                     <span>Subtotal</span>
                     <span>{formatPHP(activeDraft.subtotal)}</span>
                 </div>
+                {activeDraft.discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>
+                      Discount
+                      {activeDraft.discountPercent
+                        ? ` (${activeDraft.discountPercent}%)`
+                        : ""}
+                      {activeDraft.discountLabel
+                        ? ` · ${activeDraft.discountLabel}`
+                        : ""}
+                    </span>
+                    <span>−{formatPHP(activeDraft.discountAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-semibold text-sm md:text-base">
                     <span>Total</span>
                     <span>{formatPHP(activeDraft.total)}</span>
@@ -960,6 +1027,20 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                           {payPopover === "payment" && (
                             <>
                               <div className="text-sm text-slate-600 mb-3 space-y-1">
+                                {activeDraft.discountAmount > 0 && (
+                                  <div className="flex justify-between text-emerald-700">
+                                    <span>
+                                      Discount
+                                      {activeDraft.discountPercent
+                                        ? ` (${activeDraft.discountPercent}%)`
+                                        : ""}
+                                      {activeDraft.discountLabel
+                                        ? ` · ${activeDraft.discountLabel}`
+                                        : ""}
+                                    </span>
+                                    <span>−{formatPHP(activeDraft.discountAmount)}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
                                   <span>Total:</span>
                                   <span className="font-medium">{formatPHP(activeDraft.total)}</span>

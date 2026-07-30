@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
 import { requireOwner } from "@/src/app/lib/auth-utils";
 import { getBranchDetail } from "@/src/app/lib/owner";
+import { getBranchActivationStatus } from "@/src/app/lib/activation";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireOwner();
+    const session = await requireOwner();
     const { id } = await params;
-    const branch = await getBranchDetail(id);
+    const branch = await getBranchDetail(id, session.user.id);
     if (!branch) {
       return NextResponse.json({ error: "Branch not found" }, { status: 404 });
     }
-    return NextResponse.json(branch);
+    const activation = await getBranchActivationStatus(id);
+    return NextResponse.json({
+      ...branch,
+      activation,
+    });
   } catch (error) {
     if ((error as Error).message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
