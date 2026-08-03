@@ -7,7 +7,8 @@ import SessionList from "./SessionList";
 import ServicesSection from "./services/ServicesSection";
 import SalePanel from "./sale/SalePanel";
 import Drawer from "@/src/components/ui/Drawer";
-import { Loader2, Pencil, Check, X, AlertCircle } from "lucide-react";
+import { Group, Panel, Separator } from "react-resizable-panels";
+import { Loader2, Pencil, Check, X, AlertCircle, GripVertical } from "lucide-react";
 import { formatPHP } from "@/src/app/lib/money";
 
 type Props = {
@@ -102,6 +103,60 @@ function DrawerHeader({ draft }: { draft: DraftSale | null }) {
         {serviceCount} {serviceLabel} • {formatPHP(draft.total)}
       </p>
     </div>
+  );
+}
+
+function SessionWorkspace({ services, defaultStaffId }: Props) {
+  const [isResizable, setIsResizable] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const updateLayout = () => setIsResizable(mediaQuery.matches);
+
+    updateLayout();
+    mediaQuery.addEventListener("change", updateLayout);
+    return () => mediaQuery.removeEventListener("change", updateLayout);
+  }, []);
+
+  if (!isResizable) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex-1 p-4 md:p-6 overflow-y-auto border-b">
+          <ServicesSection services={services} staffId={defaultStaffId} />
+        </div>
+        <div className="w-full px-4 py-4 bg-slate-50 flex flex-col border-t">
+          <SalePanel />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Group
+      id="sale-session-layout"
+      orientation="horizontal"
+      className="h-full"
+    >
+      <Panel id="services" defaultSize="68%" minSize="320px">
+        <div className="h-full min-w-0 p-4 md:p-6 overflow-y-auto">
+          <ServicesSection services={services} staffId={defaultStaffId} />
+        </div>
+      </Panel>
+
+      <Separator className="group relative w-2 bg-slate-100 outline-none transition-colors hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
+          <div className="flex h-10 w-4 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-400 shadow-sm transition-colors group-hover:border-blue-400 group-hover:text-blue-500">
+            <GripVertical size={12} aria-hidden="true" />
+          </div>
+        </div>
+      </Separator>
+
+      <Panel id="sale" defaultSize="32%" minSize="280px" maxSize="50%">
+        <div className="h-full min-w-0 px-4 py-4 bg-slate-50 flex flex-col">
+          <SalePanel />
+        </div>
+      </Panel>
+    </Group>
   );
 }
 
@@ -264,17 +319,7 @@ export default function OrderPage({ services, defaultStaffId }: Props) {
             </div>
           </div>
         ) : (
-          <div className="h-full flex flex-col lg:flex-row">
-            {/* Services Grid */}
-            <div className="flex-1 p-4 md:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r">
-              <ServicesSection services={services} staffId={defaultStaffId} />
-            </div>
-
-            {/* Session Panel */}
-            <div className="w-full lg:w-80 px-4 py-4 bg-slate-50 flex flex-col border-t lg:border-t-0">
-              <SalePanel />
-            </div>
-          </div>
+          <SessionWorkspace services={services} defaultStaffId={defaultStaffId} />
         )}
       </Drawer>
     </div>

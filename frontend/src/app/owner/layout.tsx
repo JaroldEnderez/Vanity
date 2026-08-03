@@ -61,7 +61,7 @@ export default function OwnerLayout({
               <button
                 type="button"
                 onClick={() => setShowSetupGuide(true)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 shadow-sm shadow-violet-200 transition"
                 aria-label="Branch setup guide"
               >
                 <CircleHelp size={16} />
