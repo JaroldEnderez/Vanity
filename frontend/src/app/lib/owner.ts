@@ -304,6 +304,46 @@ export async function createBranchForOwner(
   return branch;
 }
 
+/** Update address (and optionally name) for a branch owned by the given owner. */
+export async function updateBranchForOwner(
+  ownerId: string,
+  branchId: string,
+  data: { address?: string; name?: string }
+) {
+  const owned = await assertBranchOwnedBy(branchId, ownerId);
+  if (!owned) {
+    throw new Error("Branch not found");
+  }
+
+  const update: { address?: string; name?: string } = {};
+
+  if (typeof data.address === "string") {
+    update.address = data.address.trim();
+  }
+
+  if (typeof data.name === "string") {
+    const trimmed = data.name.trim();
+    if (!trimmed) {
+      throw new Error("Branch name is required");
+    }
+    const existing = await db.branch.findUnique({ where: { name: trimmed } });
+    if (existing && existing.id !== branchId) {
+      throw new Error("A branch with this name already exists");
+    }
+    update.name = trimmed;
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new Error("No fields to update");
+  }
+
+  return db.branch.update({
+    where: { id: branchId },
+    data: update,
+    select: { id: true, name: true, address: true },
+  });
+}
+
 /** Ensure the branch belongs to the given owner. */
 export async function assertBranchOwnedBy(
   branchId: string,

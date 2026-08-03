@@ -6,6 +6,7 @@ import {
   materialsImportTemplateCsv,
   parseAndValidateMaterialsCsv,
 } from "@/src/app/lib/materialsImport";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -100,6 +101,19 @@ export async function POST(req: Request) {
     }
 
     const summary = await importMaterialsFromParsedRows(branchId, parsed.rows);
+    await logActivity({
+      branchId,
+      action: "material.imported",
+      entityType: "Material",
+      entityId: branchId,
+      summary: `Imported materials CSV (${summary.created} created, ${summary.updated} updated)`,
+      after: {
+        created: summary.created,
+        updated: summary.updated,
+        total: parsed.rows.length,
+        filename: file.name,
+      },
+    });
     return NextResponse.json({
       ok: true,
       created: summary.created,

@@ -31,6 +31,9 @@ model Branch {
   materials          Material[]
   terminals          Terminal[]
   activationCodes    BranchActivationCode[]
+  activityLogs       ActivityLog[]
+  customers          Customer[]
+  discountLabels     DiscountLabel[]
 
   @@index([ownerId])
 }
@@ -291,20 +294,31 @@ model SaleMaterial {
 
 model Customer {
   id          String    @id @default(uuid())
+  /// Null = system Walk-in or legacy unscoped row. New customers are branch-owned.
+  branchId    String?
   name        String
   address     String?
-  phone       String?   @unique  // Contact number
-  fb          String?   // Facebook
+  phone       String? // Contact number; unique per branch when set
+  fb          String? // Facebook
   dateOfBirth DateTime?
   createdAt   DateTime  @default(now())
   sales       Sale[]
+  branch      Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@unique([branchId, phone])
+  @@index([branchId])
 }
 
 /// Reusable discount reason names (PROMO, SENIOR CITIZEN, etc.). Percent is always entered per sale.
 model DiscountLabel {
   id        String   @id @default(uuid())
-  name      String   @unique
+  branchId  String
+  name      String
   createdAt DateTime @default(now())
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, name])
+  @@index([branchId])
 }
 
 model Payment {
@@ -348,4 +362,24 @@ model Expense {
 
   @@index([branchId])
   @@index([branchId, date])
+}
+
+/// Append-only audit trail for branch-account mutations.
+model ActivityLog {
+  id         String   @id @default(uuid())
+  branchId   String
+  actorType  String   @default("branch") // "branch" | "terminal" | "system"
+  actorId    String?
+  action     String // e.g. "service.created", "material.imported", "sale.created"
+  entityType String // "Service" | "Material" | "Sale" | "Customer" | "Staff"
+  entityId   String
+  summary    String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }

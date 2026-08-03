@@ -6,6 +6,7 @@ import {
   flattenServicesToRows,
   type ServiceForExport,
 } from "@/src/app/lib/servicesExport";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 function filenameForNow(): string {
   const d = new Date();
@@ -40,6 +41,15 @@ export async function GET() {
     const buffer = buildServicesCsvBuffer(rows);
     const filename = filenameForNow();
     const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+
+    await logActivity({
+      branchId,
+      action: "service.exported",
+      entityType: "Service",
+      entityId: branchId,
+      summary: `Exported ${services.length} service${services.length === 1 ? "" : "s"} to CSV`,
+      after: { count: services.length, filename },
+    });
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

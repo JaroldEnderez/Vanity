@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -72,6 +72,10 @@ export default function OwnerBranchDetailPage() {
   const [drawerSale, setDrawerSale] = useState<SaleItem | null>(null);
   const [selectedSale, setSelectedSale] = useState<SaleItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [address, setAddress] = useState("");
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressSaved, setAddressSaved] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -103,6 +107,7 @@ export default function OwnerBranchDetailPage() {
         const inventoryData = inventoryRes.ok ? await inventoryRes.json() : [];
         if (!cancelled) {
           setBranch(branchData);
+          setAddress(branchData.address ?? "");
           setSales(salesData);
           setInventory(inventoryData);
         }
@@ -118,6 +123,33 @@ export default function OwnerBranchDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  async function handleSaveAddress(e: FormEvent) {
+    e.preventDefault();
+    if (!id || !branch) return;
+    setSavingAddress(true);
+    setAddressError(null);
+    setAddressSaved(false);
+    try {
+      const res = await fetch(`/api/owner/branches/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddressError(data.error ?? "Failed to save address");
+        return;
+      }
+      setBranch((prev) => (prev ? { ...prev, address: data.address } : prev));
+      setAddress(data.address ?? "");
+      setAddressSaved(true);
+    } catch {
+      setAddressError("Failed to save address");
+    } finally {
+      setSavingAddress(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -163,7 +195,6 @@ export default function OwnerBranchDetailPage() {
             <Building2 size={28} className="text-emerald-600" />
             {branch.name}
           </h1>
-          <p className="text-slate-600 mt-1">{branch.address}</p>
           <span
             className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${
               branch.isOnline
@@ -179,6 +210,41 @@ export default function OwnerBranchDetailPage() {
             {branch.isOnline ? "Online" : "Offline"}
           </span>
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <h2 className="text-sm font-medium text-slate-700 mb-2">Address</h2>
+        <form
+          onSubmit={handleSaveAddress}
+          className="flex flex-col sm:flex-row gap-3"
+        >
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setAddressSaved(false);
+              setAddressError(null);
+            }}
+            placeholder="Branch address"
+            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <button
+            type="submit"
+            disabled={
+              savingAddress || address.trim() === (branch.address ?? "").trim()
+            }
+            className="px-3 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg"
+          >
+            {savingAddress ? "Saving…" : "Save address"}
+          </button>
+        </form>
+        {addressError && (
+          <p className="text-sm text-red-600 mt-2">{addressError}</p>
+        )}
+        {addressSaved && !addressError && (
+          <p className="text-sm text-emerald-600 mt-2">Address saved</p>
+        )}
       </div>
 
       <BranchActivationPanel branchId={branch.id} />

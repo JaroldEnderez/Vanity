@@ -11,6 +11,15 @@ function filenameForNow(): string {
   return `customers-${fmt}.csv`;
 }
 
+function branchIdFromSession(session: {
+  user?: { branchId?: string; role?: string };
+}): string | null {
+  const role = session.user?.role;
+  const branchId = session.user?.branchId;
+  if ((role === "branch" || role === "terminal") && branchId) return branchId;
+  return null;
+}
+
 export async function GET() {
   try {
     const session = await auth();
@@ -18,7 +27,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const branchId = branchIdFromSession(session);
     const customers = await db.customer.findMany({
+      where: branchId
+        ? {
+            OR: [{ branchId }, { branchId: null }, { id: WALK_IN_CUSTOMER_ID }],
+          }
+        : {},
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

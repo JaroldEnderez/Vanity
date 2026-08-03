@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createMaterial, getAllMaterials } from "@/src/app/lib/materials";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 export async function GET(req: Request) {
   try {
@@ -24,6 +25,22 @@ export async function POST(req: Request) {
     const branchId = await getAuthBranchId();
     const body = await req.json();
     const material = await createMaterial(branchId, body);
+    await logActivity({
+      branchId,
+      action: "material.created",
+      entityType: "Material",
+      entityId: material.id,
+      summary: `Created material “${material.name}”`,
+      after: {
+        name: material.name,
+        unit: material.unit,
+        stock: material.stock,
+        category: material.category,
+        sku: material.sku,
+        packageAmount: material.packageAmount,
+        packageMeasure: material.packageMeasure,
+      },
+    });
     return NextResponse.json(material, { status: 201 });
   } catch (error) {
     console.error(error);

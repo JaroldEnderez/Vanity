@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, Building2, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, CircleHelp, LogOut } from "lucide-react";
+import OwnerSetupGuideModal from "@/src/components/owner/OwnerSetupGuideModal";
 
 const nav = [
   { label: "Overview", href: "/owner", icon: LayoutDashboard },
@@ -18,6 +19,7 @@ export default function OwnerLayout({
 }) {
   const pathname = usePathname();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   const handleSignOut = () => {
     signOut({ callbackUrl: "/login" });
@@ -55,17 +57,33 @@ export default function OwnerLayout({
                 })}
               </nav>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-            >
-              <LogOut size={16} />
-              Sign out
-            </button>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSetupGuide(true)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+                aria-label="Branch setup guide"
+              >
+                <CircleHelp size={16} />
+                <span className="hidden sm:inline">Setup guide</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+              >
+                <LogOut size={16} />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
+
+      <OwnerSetupGuideModal
+        open={showSetupGuide}
+        onClose={() => setShowSetupGuide(false)}
+      />
 
       {/* Logout confirmation modal */}
       {showLogoutConfirm && (

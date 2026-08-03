@@ -2,12 +2,48 @@ import { NextResponse } from "next/server";
 import { db } from "@/src/app/lib/db";
 import { auth } from "@/src/app/lib/auth";
 import { WALK_IN_CUSTOMER_ID } from "@/src/app/lib/walkInCustomer";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 function getString(sp: URLSearchParams, key: string): string | null {
   const v = sp.get(key);
   if (typeof v !== "string") return null;
   const t = v.trim();
   return t ? t : null;
+}
+
+function branchIdFromSession(session: {
+  user?: { branchId?: string; role?: string };
+}): string | null {
+  const role = session.user?.role;
+  const branchId = session.user?.branchId;
+  if ((role === "branch" || role === "terminal") && branchId) return branchId;
+  return null;
+}
+
+/** Branch-owned + Walk-in + legacy unscoped (null branchId). */
+function customerListWhere(branchId: string | null, q: string | null) {
+  const scope = branchId
+    ? {
+        OR: [
+          { branchId },
+          { branchId: null },
+          { id: WALK_IN_CUSTOMER_ID },
+        ],
+      }
+    : {};
+
+  if (!q) return scope;
+
+  const textMatch = {
+    OR: [
+      { name: { contains: q, mode: "insensitive" as const } },
+      { phone: { contains: q, mode: "insensitive" as const } },
+      { address: { contains: q, mode: "insensitive" as const } },
+      { fb: { contains: q, mode: "insensitive" as const } },
+    ],
+  };
+
+  return Object.keys(scope).length > 0 ? { AND: [scope, textMatch] } : textMatch;
 }
 
 export async function GET(req: Request) {
@@ -21,22 +57,15 @@ export async function GET(req: Request) {
     const q = getString(url.searchParams, "q");
     const limitRaw = getString(url.searchParams, "limit");
     const limit = Math.max(1, Math.min(200, Number(limitRaw ?? 50) || 50));
+    const branchId = branchIdFromSession(session);
 
     const customers = await db.customer.findMany({
-      where: q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { phone: { contains: q, mode: "insensitive" } },
-              { address: { contains: q, mode: "insensitive" } },
-              { fb: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {},
+      where: customerListWhere(branchId, q),
       orderBy: { createdAt: "desc" },
       take: limit,
       select: {
         id: true,
+        branchId: true,
         name: true,
         address: true,
         phone: true,
@@ -64,6 +93,14 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const branchId = branchIdFromSession(session);
+    if (!branchId) {
+      return NextResponse.json(
+        { error: "Unauthorized - no branch session" },
+        { status: 401 }
+      );
     }
 
     const body = (await req.json()) as {
@@ -99,15 +136,33 @@ export async function POST(req: Request) {
     }
 
     const created = await db.customer.create({
-      data: { name, address, phone, fb, dateOfBirth },
+      data: { branchId, name, address, phone, fb, dateOfBirth },
       select: {
         id: true,
+        branchId: true,
         name: true,
         address: true,
         phone: true,
         fb: true,
         dateOfBirth: true,
         createdAt: true,
+      },
+    });
+
+    await logActivity({
+      branchId,
+      actorType: session.user.role ?? "branch",
+      actorId: session.user.id,
+      action: "customer.created",
+      entityType: "Customer",
+      entityId: created.id,
+      summary: `Created customer “${created.name}”`,
+      after: {
+        name: created.name,
+        phone: created.phone,
+        address: created.address,
+        fb: created.fb,
+        dateOfBirth: created.dateOfBirth,
       },
     });
 

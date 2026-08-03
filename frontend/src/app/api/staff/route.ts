@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/src/app/lib/db";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 /** Session branchId must exist on Branch or Prisma raises P2003 (FK) on Staff create. */
 async function branchExists(branchId: string): Promise<boolean> {
@@ -76,6 +77,15 @@ export async function POST(req: Request) {
         branchId: true,
         createdAt: true,
       },
+    });
+
+    await logActivity({
+      branchId,
+      action: "staff.created",
+      entityType: "Staff",
+      entityId: created.id,
+      summary: `Created staff “${created.name}”`,
+      after: { name: created.name, role: created.role },
     });
 
     return NextResponse.json(created, { status: 201 });

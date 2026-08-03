@@ -28,20 +28,20 @@ async function upsertStaff(name: string, role: string, branchId: string) {
     });
 }
 
-// Helper to create or find customer
-async function upsertCustomer(name: string, phone?: string) {
+// Helper to create or find customer for a branch
+async function upsertCustomer(branchId: string, name: string, phone?: string) {
     if (phone) {
         const existing = await db.customer.findFirst({
-            where: { phone },
+            where: { branchId, phone },
         });
         if (existing) return existing;
     }
     const existingByName = await db.customer.findFirst({
-        where: { name },
+        where: { branchId, name },
     });
     if (existingByName) return existingByName;
     return db.customer.create({
-        data: { name, phone },
+        data: { branchId, name, phone },
     });
 }
 
@@ -146,11 +146,11 @@ async function main(){
     console.log(`System customer: ${WALK_IN_CUSTOMER_NAME} (${WALK_IN_CUSTOMER_ID})`);
     
     const customers = await Promise.all([
-        upsertCustomer("Ana Reyes", "09171234567"),
-        upsertCustomer("Carlos Mendoza", "09182345678"),
-        upsertCustomer("Patricia Lim", "09193456789"),
-        upsertCustomer("Roberto Cruz", "09204567890"),
-        upsertCustomer("Diana Santos", "09215678901"),
+        upsertCustomer(branches[0].id, "Ana Reyes", "09171234567"),
+        upsertCustomer(branches[0].id, "Carlos Mendoza", "09182345678"),
+        upsertCustomer(branches[0].id, "Patricia Lim", "09193456789"),
+        upsertCustomer(branches[0].id, "Roberto Cruz", "09204567890"),
+        upsertCustomer(branches[0].id, "Diana Santos", "09215678901"),
     ]);
 
     console.log(`Created ${customers.length} customers`);

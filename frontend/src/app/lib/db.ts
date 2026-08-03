@@ -57,7 +57,7 @@ function createPrismaClient(): PrismaClient {
  * still embeds the old schema (e.g. Expense.category) until Node restarts — bump revision when
  * Prisma schema changes require a fresh client.
  */
-const PRISMA_CLIENT_REVISION = 2;
+const PRISMA_CLIENT_REVISION = 4;
 
 type GlobalPrisma = {
   prisma?: PrismaClient;

@@ -15,6 +15,7 @@ import {
   LogOut,
   Building2,
   Wallet,
+  ClipboardList,
 } from "lucide-react"
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { label: "Staff", href: "/dashboard/staff", icon: UserCog },
   { label: "Sales History", href: "/dashboard/sales", icon: History },
   { label: "Finance", href: "/dashboard/finance", icon: Wallet },
+  { label: "History", href: "/dashboard/history", icon: ClipboardList },
 ]
 
 type Props = {

@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/src/app/lib/db";
-import { auth } from "@/src/app/lib/auth";
+import { getAuthBranchId } from "@/src/app/lib/auth-utils";
 import { normalizeDiscountLabel } from "@/src/app/lib/discount";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const branchId = await getAuthBranchId();
 
     const labels = await db.discountLabel.findMany({
+      where: { branchId },
       orderBy: { name: "asc" },
       select: { id: true, name: true, createdAt: true },
     });
@@ -26,10 +24,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const branchId = await getAuthBranchId();
 
     const body = (await req.json()) as { name?: string };
     const name = normalizeDiscountLabel(body.name);
@@ -38,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     const existing = await db.discountLabel.findFirst({
-      where: { name: { equals: name, mode: "insensitive" } },
+      where: { branchId, name: { equals: name, mode: "insensitive" } },
       select: { id: true, name: true, createdAt: true },
     });
     if (existing) {
@@ -46,7 +41,7 @@ export async function POST(req: Request) {
     }
 
     const created = await db.discountLabel.create({
-      data: { name },
+      data: { branchId, name },
       select: { id: true, name: true, createdAt: true },
     });
 

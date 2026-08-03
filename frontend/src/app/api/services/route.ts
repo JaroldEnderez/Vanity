@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServicesForBranch, createService } from "@/src/app/lib/services";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 export async function GET() {
   try {
@@ -25,6 +26,21 @@ export async function POST(req: Request) {
     const service = await createService({
       ...body,
       branchId, // New services belong to the current branch
+    });
+    await logActivity({
+      branchId,
+      action: "service.created",
+      entityType: "Service",
+      entityId: service.id,
+      summary: `Created service “${service.name}”`,
+      after: {
+        name: service.name,
+        price: service.price,
+        category: service.category,
+        durationMin: service.durationMin,
+        description: service.description,
+        hairColoringFlow: service.hairColoringFlow,
+      },
     });
     return NextResponse.json(service, { status: 201 });
   } catch (error: unknown) {

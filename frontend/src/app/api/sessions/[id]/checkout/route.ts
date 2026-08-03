@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionById, checkoutSession } from "@/src/app/lib/sessions";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 // POST /sessions/:id/checkout → finalize session (mark as COMPLETED)
 export async function POST(
@@ -33,6 +34,24 @@ export async function POST(
     }
 
     const session = await checkoutSession(id, cashReceived);
+    if (session) {
+      await logActivity({
+        branchId,
+        action: "sale.created",
+        entityType: "Sale",
+        entityId: session.id,
+        summary: `Sale completed${session.name ? ` — “${session.name}”` : ""} (${Number(session.total).toFixed(2)})`,
+        after: {
+          name: session.name,
+          total: session.total,
+          discountPercent: session.discountPercent,
+          discountLabel: session.discountLabel,
+          discountAmount: session.discountAmount,
+          customerId: session.customerId,
+          staffId: session.staffId,
+        },
+      });
+    }
     return NextResponse.json(session);
   } catch (error) {
     console.error(error);

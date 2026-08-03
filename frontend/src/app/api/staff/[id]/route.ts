@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/src/app/lib/db";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { logActivity } from "@/src/app/lib/activityLog";
 
-async function assertStaffInBranch(staffId: string, branchId: string) {
-  const row = await db.staff.findFirst({
+async function getStaffInBranch(staffId: string, branchId: string) {
+  return db.staff.findFirst({
     where: { id: staffId, branchId },
-    select: { id: true },
+    select: { id: true, name: true, role: true },
   });
-  return !!row;
 }
 
 /** PATCH /api/staff/[id] */
@@ -19,8 +19,8 @@ export async function PATCH(
     const branchId = await getAuthBranchId();
     const { id } = await params;
 
-    const ok = await assertStaffInBranch(id, branchId);
-    if (!ok) {
+    const existing = await getStaffInBranch(id, branchId);
+    if (!existing) {
       return NextResponse.json({ error: "Staff not found" }, { status: 404 });
     }
 
@@ -57,6 +57,16 @@ export async function PATCH(
       },
     });
 
+    await logActivity({
+      branchId,
+      action: "staff.updated",
+      entityType: "Staff",
+      entityId: updated.id,
+      summary: `Updated staff “${updated.name}”`,
+      before: { name: existing.name, role: existing.role },
+      after: { name: updated.name, role: updated.role },
+    });
+
     return NextResponse.json(updated);
   } catch (error) {
     console.error(error);
@@ -75,8 +85,8 @@ export async function DELETE(
     const branchId = await getAuthBranchId();
     const { id } = await params;
 
-    const ok = await assertStaffInBranch(id, branchId);
-    if (!ok) {
+    const existing = await getStaffInBranch(id, branchId);
+    if (!existing) {
       return NextResponse.json({ error: "Staff not found" }, { status: 404 });
     }
 
@@ -89,6 +99,14 @@ export async function DELETE(
     }
 
     await db.staff.delete({ where: { id } });
+    await logActivity({
+      branchId,
+      action: "staff.deleted",
+      entityType: "Staff",
+      entityId: id,
+      summary: `Deleted staff “${existing.name}”`,
+      before: { name: existing.name, role: existing.role },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);

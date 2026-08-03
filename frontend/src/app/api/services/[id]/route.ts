@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServiceById, updateService, deleteService } from "@/src/app/lib/services";
 import { getAuthBranchId } from "@/src/app/lib/auth-utils";
+import { logActivity } from "@/src/app/lib/activityLog";
 
 /** Only allow access if service belongs to this branch or is shared (branchId null). */
 function canAccessService(service: { branchId: string | null }, branchId: string) {
@@ -58,6 +59,31 @@ export async function PUT(
 
     const body = await req.json();
     const service = await updateService(id, body);
+    await logActivity({
+      branchId,
+      action: "service.updated",
+      entityType: "Service",
+      entityId: service.id,
+      summary: `Updated service “${service.name}”`,
+      before: {
+        name: existing.name,
+        price: existing.price,
+        category: existing.category,
+        durationMin: existing.durationMin,
+        description: existing.description,
+        hairColoringFlow: existing.hairColoringFlow,
+        isActive: existing.isActive,
+      },
+      after: {
+        name: service.name,
+        price: service.price,
+        category: service.category,
+        durationMin: service.durationMin,
+        description: service.description,
+        hairColoringFlow: service.hairColoringFlow,
+        isActive: service.isActive,
+      },
+    });
     return NextResponse.json(service);
   } catch (error) {
     console.error(error);
@@ -79,8 +105,8 @@ export async function DELETE(
     const { id } = await params;
     const existing = await getServiceById(id);
 
-    // Allow soft-delete if the branch can access the service (own or shared)
-    if (!existing || !canAccessService(existing, branchId)) {
+    // Only soft-delete branch-owned services (not shared catalog).
+    if (!existing || !canModifyService(existing, branchId)) {
       return NextResponse.json(
         { error: "Service not found" },
         { status: 404 }
@@ -88,6 +114,20 @@ export async function DELETE(
     }
 
     await deleteService(id);
+    await logActivity({
+      branchId,
+      action: "service.deleted",
+      entityType: "Service",
+      entityId: id,
+      summary: `Deleted service “${existing.name}”`,
+      before: {
+        name: existing.name,
+        price: existing.price,
+        category: existing.category,
+        durationMin: existing.durationMin,
+        description: existing.description,
+      },
+    });
     return NextResponse.json({ message: "Service deleted successfully" });
   } catch (error) {
     console.error(error);
@@ -99,4 +139,3 @@ export async function DELETE(
     );
   }
 }
-
