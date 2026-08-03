@@ -12,7 +12,6 @@ import ServiceCard from "./ServiceCard";
 type Props = {
   services: Service[];
   onSelectService: (service: Service) => void;
-  onHoverService?: (serviceId: string) => void;
   selectedServiceId?: string | null;
 };
 
@@ -24,7 +23,6 @@ function groupingKey(category: string | undefined | null): string {
 export default function ServiceGrid({
   services,
   onSelectService,
-  onHoverService,
   selectedServiceId = null,
 }: Props) {
   const sections = useMemo(() => {
@@ -80,7 +78,6 @@ export default function ServiceGrid({
                 key={service.id}
                 service={service}
                 onSelect={onSelectService}
-                onHover={onHoverService ? () => onHoverService(service.id) : undefined}
                 isHighlighted={selectedServiceId === service.id}
               />
             ))}

@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Service, labelServiceCategory } from "@/src/app/types/service";
 import ServiceGrid from "./ServiceGrid";
 import { useSaleStore, DraftMaterial } from "@/src/app/store/saleStore";
-import type { PackageMeasure } from "@prisma/client";
 import { Search } from "lucide-react";
 
 type Props = {
@@ -12,26 +11,15 @@ type Props = {
   staffId: string;
 };
 
-type ApiServiceMaterialRow = {
-  materialId: string;
-  quantity: number;
-  material: {
-    id: string;
-    name: string;
-    unit: string;
-    packageAmount?: number | null;
-    packageMeasure?: PackageMeasure | null;
-  };
-};
-
-function mapApiToDraftMaterials(rows: ApiServiceMaterialRow[]): DraftMaterial[] {
-  return rows.map((sm) => ({
+function materialsFromService(service: Service): DraftMaterial[] {
+  if (!service.materials?.length) return [];
+  return service.materials.map((sm) => ({
     materialId: sm.materialId,
     name: sm.material.name,
     unit: sm.material.unit,
     quantity: sm.quantity,
     packageAmount: sm.material.packageAmount ?? null,
-    packageMeasure: sm.material.packageMeasure ?? null,
+    packageMeasure: (sm.material.packageMeasure as DraftMaterial["packageMeasure"]) ?? null,
   }));
 }
 
@@ -40,8 +28,6 @@ export default function ServicesSection({ services, staffId }: Props) {
   const createDraft = useSaleStore((state) => state.createDraft);
   const addItemToDraft = useSaleStore((state) => state.addItemToDraft);
   const isLoading = useSaleStore((state) => state.isLoading);
-
-  const materialsCache = useRef<Map<string, DraftMaterial[]>>(new Map());
 
   const [isCreating, setIsCreating] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -56,27 +42,6 @@ export default function ServicesSection({ services, staffId }: Props) {
       return false;
     });
   }, [services, serviceSearch]);
-
-  const fetchServiceMaterials = useCallback(async (serviceId: string): Promise<DraftMaterial[]> => {
-    const cached = materialsCache.current.get(serviceId);
-    if (cached) return cached;
-    const res = await fetch(`/api/services/${serviceId}/materials`);
-    if (!res.ok) {
-      materialsCache.current.set(serviceId, []);
-      return [];
-    }
-    const data: ApiServiceMaterialRow[] = await res.json();
-    const mapped = mapApiToDraftMaterials(data);
-    materialsCache.current.set(serviceId, mapped);
-    return mapped;
-  }, []);
-
-  const prefetchMaterials = useCallback(
-    (serviceId: string) => {
-      void fetchServiceMaterials(serviceId).catch(() => {});
-    },
-    [fetchServiceMaterials]
-  );
 
   const addItem = useCallback(
     async (service: Service, materials: DraftMaterial[] = []) => {
@@ -122,8 +87,7 @@ export default function ServicesSection({ services, staffId }: Props) {
   );
 
   const handleSelectService = async (service: Service) => {
-    const materials = await fetchServiceMaterials(service.id);
-    await addItem(service, materials);
+    await addItem(service, materialsFromService(service));
   };
 
   return (
@@ -132,7 +96,7 @@ export default function ServicesSection({ services, staffId }: Props) {
         <h2 className="text-lg md:text-xl font-semibold">Services</h2>
         <div className="relative w-full sm:max-w-xs">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-x-1/2 text-slate-400"
             aria-hidden
           />
           <input
@@ -156,7 +120,6 @@ export default function ServicesSection({ services, staffId }: Props) {
         <ServiceGrid
           services={filteredServices}
           onSelectService={handleSelectService}
-          onHoverService={prefetchMaterials}
         />
       )}
 

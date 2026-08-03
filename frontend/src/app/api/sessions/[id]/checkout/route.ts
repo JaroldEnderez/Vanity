@@ -47,8 +47,8 @@ export async function POST(
           discountPercent: session.discountPercent,
           discountLabel: session.discountLabel,
           discountAmount: session.discountAmount,
-          customerId: session.customerId,
-          staffId: session.staffId,
+          customer: session.customer?.name ?? null,
+          staff: session.staff?.name ?? null,
         },
       });
     }

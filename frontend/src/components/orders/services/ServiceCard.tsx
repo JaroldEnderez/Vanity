@@ -7,11 +7,10 @@ import { formatPHP } from "@/src/app/lib/money";
 type Props = {
   service: Service;
   onSelect?: (service: Service) => void;
-  onHover?: () => void;
   isHighlighted?: boolean;
 };
 
-export default function ServiceCard({ service, onSelect, onHover, isHighlighted = false }: Props) {
+export default function ServiceCard({ service, onSelect, isHighlighted = false }: Props) {
   const draftSales = useSaleStore((state) => state.draftSales);
   const activeDraftId = useSaleStore((state) => state.activeDraftId);
   const activeDraft = activeDraftId
@@ -23,7 +22,6 @@ export default function ServiceCard({ service, onSelect, onHover, isHighlighted 
     <button
       disabled={isDisabled}
       onClick={() => onSelect?.(service)}
-      onMouseEnter={onHover}
       className={`rounded-lg p-4 border transition-transform duration-150 cursor-pointer
         ${isDisabled
           ? "opacity-50 cursor-not-allowed"

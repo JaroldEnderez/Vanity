@@ -57,4 +57,17 @@ export type Service = {
   durationMin?: number | null;
   isActive?: boolean;
   branchId?: string | null;
+  usesMaterials?: boolean;
+  /** Recipe rows from getServices / products list (optional). */
+  materials?: Array<{
+    materialId: string;
+    quantity: number;
+    material: {
+      id: string;
+      name: string;
+      unit: string;
+      packageAmount?: number | null;
+      packageMeasure?: string | null;
+    };
+  }>;
 };

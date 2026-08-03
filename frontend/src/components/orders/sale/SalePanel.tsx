@@ -63,6 +63,17 @@ function draftHasOptionalSessionContent(d: DraftSale): boolean {
   return materials.length > 0 || remarks.length > 0;
 }
 
+/** True when the session still has the auto-generated "Session #N" name (or none). */
+function draftNeedsCustomName(d: DraftSale): boolean {
+  const name = (d.name ?? "").trim();
+  if (!name) return true;
+  return /^Session #\d+$/i.test(name);
+}
+
+function nextPayStepAfterName(d: DraftSale): "no_materials" | "payment" {
+  return draftHasOptionalSessionContent(d) ? "payment" : "no_materials";
+}
+
 // Status badge component
 function StatusBadge({ status }: { status: DraftStatus }) {
   const config = {
@@ -83,8 +94,10 @@ function StatusBadge({ status }: { status: DraftStatus }) {
 
 export default function SalePanel({ title = "Draft Sale" }: Props) {
     const [mounted, setMounted] = useState(false);
-    /** Payment popover: closed | warn when no optional materials/remarks | cash/change summary + confirm */
-    const [payPopover, setPayPopover] = useState<"closed" | "no_materials" | "payment">("closed");
+    /** Payment popover: closed | name nudge | materials nudge | cash confirm */
+    const [payPopover, setPayPopover] = useState<
+      "closed" | "unnamed" | "no_materials" | "payment"
+    >("closed");
     const [isProcessing, setIsProcessing] = useState(false);
     const [cashReceived, setCashReceived] = useState<string>("");
     const [newItemId, setNewItemId] = useState<string | null>(null);
@@ -987,7 +1000,9 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
                         type="button"
                         onClick={() => {
                           if (!canCheckout) return;
-                          if (draftHasOptionalSessionContent(activeDraft)) {
+                          if (draftNeedsCustomName(activeDraft)) {
+                            setPayPopover("unnamed");
+                          } else if (draftHasOptionalSessionContent(activeDraft)) {
                             setPayPopover("payment");
                           } else {
                             setPayPopover("no_materials");
@@ -1001,6 +1016,35 @@ export default function SalePanel({ title = "Draft Sale" }: Props) {
 
                       {payPopover !== "closed" && canCheckout && (
                         <div className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                          {payPopover === "unnamed" && (
+                            <>
+                              <p className="text-sm text-amber-800 mb-1 font-medium">
+                                This session is still using a default name.
+                              </p>
+                              <p className="text-xs text-slate-600 mb-3">
+                                We recommend naming it (for example, the client or service)
+                                so it is easier to find in sales history and records.
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPayPopover("closed")}
+                                  className="flex-1 px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-100 transition"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPayPopover(nextPayStepAfterName(activeDraft))
+                                  }
+                                  className="flex-1 px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 transition font-medium"
+                                >
+                                  Proceed anyway
+                                </button>
+                              </div>
+                            </>
+                          )}
                           {payPopover === "no_materials" && (
                             <>
                               <p className="text-sm text-amber-800 mb-3">

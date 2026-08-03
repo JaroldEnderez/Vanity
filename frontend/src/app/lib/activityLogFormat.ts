@@ -25,6 +25,8 @@ const FIELD_LABELS: Record<string, string> = {
   dateOfBirth: "Date of birth",
   role: "Role",
   total: "Total",
+  customer: "Customer",
+  staff: "Staff",
   customerId: "Customer",
   staffId: "Staff",
   discountPercent: "Discount %",

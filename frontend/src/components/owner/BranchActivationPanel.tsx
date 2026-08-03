@@ -33,6 +33,10 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
   const [error, setError] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedCode | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirmRevokeCodes, setConfirmRevokeCodes] = useState(false);
+  const [confirmRevokeTerminalId, setConfirmRevokeTerminalId] = useState<string | null>(
+    null
+  );
 
   const load = useCallback(async () => {
     try {
@@ -92,6 +96,7 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
         return;
       }
       setGenerated(null);
+      setConfirmRevokeCodes(false);
       await load();
     } catch {
       setError("Failed to revoke codes");
@@ -113,6 +118,7 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
         setError("Failed to revoke terminal");
         return;
       }
+      setConfirmRevokeTerminalId(null);
       await load();
     } catch {
       setError("Failed to revoke terminal");
@@ -120,6 +126,10 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
       setBusy(false);
     }
   };
+
+  const terminalPendingRevoke = confirmRevokeTerminalId
+    ? status?.terminals.find((t) => t.id === confirmRevokeTerminalId)
+    : null;
 
   const copyText = async (text: string) => {
     try {
@@ -184,7 +194,7 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
           {(generated || status?.pendingCode) && (
             <button
               type="button"
-              onClick={revokeCodes}
+              onClick={() => setConfirmRevokeCodes(true)}
               disabled={busy}
               className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-lg"
             >
@@ -293,7 +303,7 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
                 </div>
                 <button
                   type="button"
-                  onClick={() => revokeTerminal(t.id)}
+                  onClick={() => setConfirmRevokeTerminalId(t.id)}
                   disabled={busy}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg disabled:opacity-50"
                 >
@@ -303,6 +313,90 @@ export default function BranchActivationPanel({ branchId }: { branchId: string }
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {confirmRevokeCodes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="bg-white rounded-xl shadow-xl p-6 mx-4 max-w-sm w-full"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="revoke-code-title"
+          >
+            <h3
+              id="revoke-code-title"
+              className="text-lg font-semibold text-slate-900 mb-1"
+            >
+              Revoke activation code?
+            </h3>
+            <p className="text-sm text-slate-600 mb-6">
+              The unused code will stop working. Anyone with the QR or code will
+              no longer be able to activate a POS for this branch until you
+              generate a new one.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmRevokeCodes(false)}
+                disabled={busy}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={revokeCodes}
+                disabled={busy}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                Revoke code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmRevokeTerminalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="bg-white rounded-xl shadow-xl p-6 mx-4 max-w-sm w-full"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="revoke-terminal-title"
+          >
+            <h3
+              id="revoke-terminal-title"
+              className="text-lg font-semibold text-slate-900 mb-1"
+            >
+              Revoke this terminal?
+            </h3>
+            <p className="text-sm text-slate-600 mb-6">
+              {terminalPendingRevoke
+                ? `“${terminalPendingRevoke.name}” will be disconnected from this branch and will need a new activation code to reconnect.`
+                : "This terminal will be disconnected from this branch and will need a new activation code to reconnect."}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmRevokeTerminalId(null)}
+                disabled={busy}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => revokeTerminal(confirmRevokeTerminalId)}
+                disabled={busy}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                Revoke terminal
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

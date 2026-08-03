@@ -21,7 +21,10 @@ export async function POST(
 
     const body = await req.json();
 
-    if (!body.serviceId || !body.price) {
+    const serviceId =
+      typeof body.serviceId === "string" ? body.serviceId.trim() : "";
+    const price = Number(body.price);
+    if (!serviceId || !Number.isFinite(price) || price < 0) {
       return NextResponse.json(
         { error: "serviceId and price are required" },
         { status: 400 }
@@ -29,9 +32,9 @@ export async function POST(
     }
 
     const session = await addItemToSession(id, {
-      serviceId: body.serviceId,
+      serviceId,
       qty: body.qty || 1,
-      price: body.price,
+      price,
       materials: body.materials,
       serviceDisplayName: body.serviceDisplayName,
       colorUsed: body.colorUsed,
